@@ -441,3 +441,34 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .flow .st small { font-size: 11px; }
 }
 @media print { .sidebar, .topbar, .bottomnav, .panel, .panel-mobile { display: none !important; } .main { margin: 0; } }
+
+/* target SROI */
+.tgt { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.tgt .row.between { gap: 6px; }
+.tgt svg { width: 13px; height: 13px; }
+.tgt b { color: var(--text); }
+.tgt .progress { margin-top: 6px; height: 6px; }
+.tgt.ok .progress i { background: #16A34A; }
+.tgt.ok .b { color: #15803D; }
+.tgt.no .progress i { background: #E8A317; }
+.tgt.no .b { color: #B45309; }
+.tgt.none { display: flex; align-items: center; gap: 6px; font-style: italic; }
+.tchip { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 9px; }
+.tchip.ok { background: #DCFCE7; color: #15803D; }
+.tchip.no { background: #FEF3C7; color: #B45309; }
+i.tmark { display: inline-block; width: 4px; height: 12px; border-radius: 1px; background: #E8A317; }
+.seg-radio { display: flex; flex-wrap: wrap; gap: 8px; }
+.seg-radio label { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; cursor: pointer; font-size: 13.5px; }
+.seg-radio label:has(input:checked) { border-color: var(--primary); background: var(--primary-tint); color: var(--primary-dark); font-weight: 600; }
+#tgWrap .only-cab { display: none; }
+#tgWrap.mode-cabang .only-cab { display: block; }
+#tgWrap.mode-cabang .only-ser { display: none; }
+#tgWrap .inp-wrap .inp { min-width: 140px; }
+/* kredensial akun */
+.cred { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cred > div { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; background: #F8FAFC; }
+.cred span { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.cred b { font-size: 16px; letter-spacing: .5px; word-break: break-all; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+@media (max-width: 560px) { .cred { grid-template-columns: 1fr; } }
+.pv svg { width: 13px; height: 13px; vertical-align: -2px; }

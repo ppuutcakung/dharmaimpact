@@ -36,7 +36,7 @@ registerPage('laporan', {
 registerPage('master', {
   roles: ['ADMIN'],
   init: function (el) {
-    this.tab = 'cabang'; this.kpiTh = new Date().getFullYear(); this.kpiCab = ''; this.ctTh = new Date().getFullYear();
+    this.tab = 'cabang'; this.kpiTh = new Date().getFullYear(); this.kpiCab = ''; this.ctTh = new Date().getFullYear(); this.tgTh = new Date().getFullYear(); this.tgMode = null;
     el.innerHTML = '<div class="tabs" id="mTabs"></div><div id="mBody"></div>';
     var self = this;
     el.addEventListener('click', function (e) {
@@ -47,15 +47,20 @@ registerPage('master', {
       if (e.target.id === 'kpiTh') { self.kpiTh = +e.target.value; self.kpiRows = null; self.render(el); }
       if (e.target.id === 'kpiCab') { self.kpiCab = e.target.value; self.kpiRows = null; self.render(el); }
       if (e.target.id === 'ctTh') { self.ctTh = +e.target.value; self.render(el); }
+      if (e.target.id === 'tgTh') { self.tgTh = +e.target.value; self.tgMode = null; self.render(el); }
+      if (e.target.name === 'tgMode') { self.tgMode = e.target.value; var w = $('#tgWrap', el); if (w) w.classList.toggle('mode-cabang', self.tgMode === 'cabang'); }
     });
     el.addEventListener('input', function (e) {
       var k = e.target.dataset.kpi; if (!k) return;
       var p = k.split('|'); self.kpiRows[+p[0]][p[1]] = (p[1] === 'bobot' || p[1] === 'target') ? parseID(e.target.value) : e.target.value; self.kpiTotal(el);
     });
   },
-  show: function (el) { setTitle('Data Induk & Parameter', 'Administrasi'); this.render(el); },
+  show: function (el) {
+    setTitle('Data Induk & Parameter', 'Administrasi'); this.render(el);
+    var self = this; swr('users', 'listUsers', {}, function (d) { App.users = d; if (self.tab === 'cabang') self.render(el); }, { fresh: 60000 });
+  },
   render: function (el) {
-    var tabs = [['cabang', 'Cabang'], ['ct', 'UMK & Budget'], ['sektor', 'Sektor'], ['program', 'Program'], ['kpi', 'KPI & Bobot'], ['param', 'Parameter Baku']];
+    var tabs = [['cabang', 'Cabang'], ['ct', 'UMK & Budget'], ['sektor', 'Sektor'], ['program', 'Program'], ['kpi', 'KPI & Bobot'], ['target', 'Target SROI'], ['param', 'Parameter Baku']];
     $('#mTabs', el).innerHTML = tabs.map(function (t) { return '<button data-tab="' + t[0] + '" class="' + (this.tab === t[0] ? 'on' : '') + '">' + t[1] + '</button>'; }, this).join('');
     $('#mBody', el).innerHTML = this['r_' + this.tab]();
   },
@@ -63,8 +68,9 @@ registerPage('master', {
     return '<div class="card"><div class="card-head"><div><h3>' + title + '</h3><p>' + desc + '</p></div><button class="btn btn-primary" data-m="add-' + kind + '">' + ic('plus') + ' ' + addLabel + '</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th class="c">Status</th><th class="c">Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   },
   r_cabang: function () {
-    var rows = (App.master.cabang || []).map(function (c) { return '<tr><td class="b">' + esc(c.kode) + '</td><td>' + esc(c.nama_cabang) + '</td><td>' + esc(c.lokasi) + '</td><td>' + esc(c.pic || '—') + '</td><td class="c">' + (isTrue(c.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-cabang" data-id="' + c.cabang_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-cabang" data-id="' + c.cabang_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
-    return this.simpleTable('Cabang', 'Data yang sudah dipakai tidak dihapus — cukup dinonaktifkan (B1).', ['Kode', 'Nama Cabang', 'Lokasi', 'PIC Koordinator'], rows, 'Tambah Cabang', 'cabang');
+    var akunOf = function (cid) { return (App.users || []).filter(function (u) { return u.role === 'CABANG' && String(u.cabang_id) === String(cid); }); };
+    var rows = (App.master.cabang || []).map(function (c) { var ak = akunOf(c.cabang_id); return '<tr><td class="b">' + esc(c.kode) + '</td><td>' + esc(c.nama_cabang) + '</td><td>' + esc(c.lokasi) + '</td><td>' + esc(c.pic || '—') + '</td><td>' + (ak.length ? ak.map(function (u) { return '<span class="badge badge-info" title="' + (isTrue(u.aktif) ? 'Aktif' : 'Nonaktif') + '">' + ic('user') + ' ' + esc(u.username) + '</span>'; }).join(' ') : '<button class="btn btn-xs" data-m="akun-cabang" data-id="' + c.cabang_id + '">' + ic('key') + ' Buat akun</button>') + '</td><td class="c">' + (isTrue(c.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-cabang" data-id="' + c.cabang_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-cabang" data-id="' + c.cabang_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
+    return this.simpleTable('Cabang', 'Setiap cabang baru otomatis dibuatkan akun login (username = kode cabang). Data yang sudah dipakai tidak dihapus — cukup dinonaktifkan (B1).', ['Kode', 'Nama Cabang', 'Lokasi', 'PIC Koordinator', 'Akun Login'], rows, 'Tambah Cabang', 'cabang');
   },
   r_sektor: function () {
     var rows = (App.master.sektor || []).map(function (s) { return '<tr><td>' + esc(s.nama_sektor) + '</td><td class="c">' + (isTrue(s.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-sektor" data-id="' + s.sektor_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-sektor" data-id="' + s.sektor_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
@@ -111,6 +117,29 @@ registerPage('master', {
     var c = $('#kpiTot', el); if (c) { c.textContent = fmtNum(t, 2) + '%'; c.style.color = ok ? '#15803D' : '#DC2626'; }
     var b = $('#kpiSave', el); if (b) b.disabled = !ok || !this.kpiRows.length;
   },
+  r_target: function () {
+    var th = this.tgTh, ys = M.years(), yn = new Date().getFullYear();
+    [yn + 1, th].forEach(function (y) { if (ys.indexOf(y) < 0) ys.push(y); }); ys.sort(function (a, b) { return b - a; });
+    var T = (App.master.target_sroi || []).filter(function (r) { return Number(r.tahun) === th; });
+    var get = function (k) { var r = T.filter(function (x) { return String(x.cabang_id || '') === k; })[0]; return r ? N(r.target) : 0; };
+    var nas = get('NASIONAL'), ser = get(''), perCab = T.some(function (r) { return r.cabang_id && r.cabang_id !== 'NASIONAL'; });
+    if (!this.tgMode) this.tgMode = perCab ? 'cabang' : 'seragam';
+    var real = {}; (App.proyek || []).forEach(function (p) { if (Number(p.tahun) === th && p.status === 'Disetujui') real[p.cabang_id] = proyekRatio(p); });
+    var okL = (App.proyek || []).filter(function (p) { return Number(p.tahun) === th && p.status === 'Disetujui'; }), w = Agg.weighted(okL);
+    var inp = function (id, v, ph) { return '<div class="inp-wrap"><input class="inp num" inputmode="decimal" id="' + id + '" value="' + (v ? esc(numIn(v, 2)) : '') + '" placeholder="' + esc(ph || 'mis. 2,50') + '"><span class="post">: 1</span></div>'; };
+    return '<div class="card mb"><div class="card-head"><div><h3>' + ic('target') + ' Target SROI Tahun ' + th + '</h3><p>Target rasio SROI tampil sebagai garis/penanda ◆ di grafik dashboard akumulasi & dashboard cabang, serta kolom Target di tabel.</p></div>' +
+      '<select class="inp" id="tgTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div>' +
+      '<div class="card-pad" style="padding-top:0"><div class="form-grid" style="grid-template-columns:1fr 1fr">' +
+      '<div class="field"><label>Target Nasional (akumulasi seluruh cabang)</label>' + inp('tgNas', nas) + '<span class="hint">Dibandingkan dengan rata-rata tertimbang seluruh cabang yang Disetujui' + (okL.length ? ' — realisasi ' + th + ': <b>' + ratioFmt(w.ratio) + '</b>' : '') + '. Kosong = memakai target seragam.</span></div>' +
+      '<div class="field"><label>Cara menetapkan target cabang</label><div class="seg-radio"><label><input type="radio" name="tgMode" value="seragam"' + (this.tgMode === 'seragam' ? ' checked' : '') + '> Seragam untuk semua cabang</label><label><input type="radio" name="tgMode" value="cabang"' + (this.tgMode === 'cabang' ? ' checked' : '') + '> Berbeda per cabang</label></div></div>' +
+      '</div></div></div>' +
+      '<div class="card' + (this.tgMode === 'cabang' ? ' mode-cabang' : '') + '" id="tgWrap"><div class="card-head"><div><h3>Target Cabang</h3><p class="only-ser">Satu target berlaku untuk semua cabang aktif.</p><p class="only-cab">Isi target tiap cabang. Kolom yang dikosongkan memakai <b>target seragam</b> sebagai cadangan.</p></div></div>' +
+      '<div class="card-pad" style="padding-top:0"><div class="field" style="max-width:340px"><label>Target seragam semua cabang</label>' + inp('tgSer', ser) + '</div></div>' +
+      '<div class="only-cab tbl-wrap"><table class="tbl edit"><thead><tr><th>Cabang</th><th class="r" style="min-width:170px">Target SROI</th><th class="r">Realisasi ' + th + '</th><th class="c">Capaian</th></tr></thead><tbody>' +
+      M.cabangAktif().map(function (c) { var v = get(String(c.cabang_id)), t = v || ser, rr = real[c.cabang_id]; return '<tr><td class="b">' + esc(c.nama_cabang) + '<span class="sub">' + esc(c.kode || '') + '</span></td><td>' + inp('tg_' + c.cabang_id, v, ser ? 'ikut seragam (' + fmtNum(ser, 2) + ')' : 'mis. 2,00') + '</td><td class="r tnum">' + (rr != null ? ratioFmt(rr) : '—') + '</td><td class="c">' + (rr != null && t ? tgtCell(rr, t, true) : '—') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>' +
+      '<div class="card-foot"><div class="row"><button class="btn btn-sm" data-m="tg-copy">' + ic('copy') + ' Salin dari ' + (th - 1) + '</button>' + (T.length ? '<button class="btn btn-sm btn-danger" data-m="tg-del">' + ic('trash') + ' Hapus target ' + th + '</button>' : '') + '</div><button class="btn btn-primary" data-m="tg-save">' + ic('save') + ' Simpan Target</button></div></div>';
+  },
   r_param: function () {
     var rows = (App.master.parameter || []);
     var get = function (k, d) { var r = rows.filter(function (x) { return x.key === k && !x.tahun; })[0]; return r ? r.value : d; };
@@ -144,9 +173,47 @@ registerPage('master', {
             if (!res.success) { toast(res.message, 'err'); return false; }
             var lst = App.master[F.list], ix = lst.findIndex(function (x) { return String(x[F.key]) === String(res.data[F.key]); });
             if (ix > -1) lst[ix] = res.data; else lst.push(res.data);
+            if (res.users) App.users = res.users;
             self.after(); self.render(el); toast(F.title + ' tersimpan.', 'ok');
+            if (res.akun) setTimeout(function () { showAkunCabang(res.akun); }, 50);
           }
         }]
+      });
+    }
+    if (m === 'akun-cabang') {
+      var cab0 = M.cabang(btn.dataset.id);
+      if (!(await confirmBox('Buat akun login untuk ' + esc(cab0.nama_cabang) + '?', 'Username dibuat dari kode cabang dan password dibuat acak. Password hanya ditampilkan sekali.', 'Buat akun'))) return;
+      return withBtn(btn, async function () {
+        var res = await api('buatAkunCabang', { cabang_id: btn.dataset.id });
+        if (!res.success) return toast(res.message, 'err');
+        if (res.users) App.users = res.users;
+        self.after(); self.render(el); showAkunCabang(res.data);
+      });
+    }
+    if (m === 'tg-save' || m === 'tg-del' || m === 'tg-copy') {
+      var th2 = self.tgTh, mode = self.tgMode, rowsT = [];
+      var val = function (id) { var i = $('#' + id, el); return i ? (parseID(i.value) || 0) : 0; };
+      var payload;
+      if (m === 'tg-copy') {
+        var src = (App.master.target_sroi || []).filter(function (r) { return Number(r.tahun) === th2 - 1; });
+        if (!src.length) return toast('Target tahun ' + (th2 - 1) + ' belum ada.', 'warn');
+        payload = { tahun: th2, nasional: 0, seragam: 0, mode: 'seragam', rows: [] };
+        src.forEach(function (r) { if (r.cabang_id === 'NASIONAL') payload.nasional = N(r.target); else if (!r.cabang_id) payload.seragam = N(r.target); else { payload.mode = 'cabang'; payload.rows.push({ cabang_id: r.cabang_id, target: N(r.target) }); } });
+      } else if (m === 'tg-del') {
+        if (!(await confirmBox('Hapus target SROI ' + th2 + '?', 'Target nasional & seluruh target cabang tahun ini dihapus. Grafik tidak lagi menampilkan target tahun ini.', 'Hapus', 'btn-danger'))) return;
+        payload = { tahun: th2, nasional: 0, seragam: 0, mode: 'seragam', rows: [] };
+      } else {
+        M.cabangAktif().forEach(function (c) { var v = val('tg_' + c.cabang_id); if (v) rowsT.push({ cabang_id: c.cabang_id, target: v }); });
+        payload = { tahun: th2, nasional: val('tgNas'), seragam: val('tgSer'), mode: mode, rows: rowsT };
+        if (!payload.nasional && !payload.seragam && !(mode === 'cabang' && rowsT.length)) return toast('Isi minimal satu target (nasional, seragam, atau per cabang).', 'warn');
+        if (mode === 'cabang' && !payload.seragam && rowsT.length < M.cabangAktif().length) { if (!(await confirmBox('Sebagian cabang belum punya target', 'Cabang yang kosong tidak memiliki target karena target seragam juga kosong. Lanjut simpan?', 'Simpan'))) return; }
+      }
+      return withBtn(btn, async function () {
+        var res = await api('saveTargetSroi', payload);
+        if (!res.success) return toast(res.message, 'err');
+        App.master.target_sroi = (App.master.target_sroi || []).filter(function (r) { return Number(r.tahun) !== th2; }).concat(res.data);
+        self.tgMode = null; self.after(); self.render(el);
+        toast(m === 'tg-del' ? 'Target ' + th2 + ' dihapus.' : m === 'tg-copy' ? 'Target ' + (th2 - 1) + ' disalin ke ' + th2 + '.' : 'Target SROI ' + th2 + ' tersimpan.', 'ok');
       });
     }
     if (m === 'save-ct') {
@@ -196,13 +263,13 @@ registerPage('master', {
     }
     if (/^del-(cabang|sektor|program|ct)$/.test(m)) {
       var kind = m === 'del-ct' ? 'cabang_tahun' : m.slice(4), id = btn.dataset.id;
-      var label = kind === 'cabang' ? 'cabang ' + M.cabangName(id) : kind === 'sektor' ? 'sektor ' + M.sektorName(id) : kind === 'program' ? 'program ' + M.programName(id) : 'UMK & budget ' + M.cabangName(id) + ' tahun ' + self.ctTh;
+      var label = kind === 'cabang' ? 'cabang ' + M.cabangName(id) + ' beserta akun login-nya' : kind === 'sektor' ? 'sektor ' + M.sektorName(id) : kind === 'program' ? 'program ' + M.programName(id) : 'UMK & budget ' + M.cabangName(id) + ' tahun ' + self.ctTh;
       if (!(await confirmBox('Hapus ' + esc(label) + '?', 'Data yang sudah dipakai di perhitungan tidak bisa dihapus — cukup dinonaktifkan lewat tombol Ubah.', 'Hapus', 'btn-danger'))) return;
       return withBtn(btn, async function () {
         var res = await api('deleteMaster', { kind: kind, id: id, tahun: self.ctTh });
         if (!res.success) return toast(res.message, 'err');
         var mm2 = App.master;
-        if (kind === 'cabang') { mm2.cabang = mm2.cabang.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.cabang_tahun = mm2.cabang_tahun.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.kpi = mm2.kpi.filter(function (x) { return String(x.cabang_id || '') !== String(id); }); }
+        if (kind === 'cabang') { App.users = (App.users || []).filter(function (u) { return String(u.cabang_id) !== String(id); }); mm2.target_sroi = (mm2.target_sroi || []).filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.cabang = mm2.cabang.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.cabang_tahun = mm2.cabang_tahun.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.kpi = mm2.kpi.filter(function (x) { return String(x.cabang_id || '') !== String(id); }); }
         if (kind === 'sektor') mm2.sektor = mm2.sektor.filter(function (x) { return String(x.sektor_id) !== String(id); });
         if (kind === 'program') mm2.program = mm2.program.filter(function (x) { return String(x.program_id) !== String(id); });
         if (kind === 'cabang_tahun') mm2.cabang_tahun = mm2.cabang_tahun.filter(function (x) { return !(String(x.cabang_id) === String(id) && Number(x.tahun) === self.ctTh); });
@@ -227,6 +294,14 @@ registerPage('master', {
     }
   }
 });
+/** Tampilkan username & password akun cabang (sekali saja). */
+function showAkunCabang(a) {
+  var txt = 'Akun DharmaImpact — ' + a.cabang + '\nUsername: ' + a.username + '\nPassword: ' + a.password;
+  modal({ title: 'Akun login cabang dibuat', body:
+    '<div class="banner banner-green" style="margin-bottom:12px">' + ic('check-circle') + '<div><b>Akun untuk ' + esc(a.cabang) + ' siap dipakai</b><p>Catat atau salin sekarang — password hanya ditampilkan sekali. Bisa direset kapan saja di menu Pengguna.</p></div></div>' +
+    '<div class="cred"><div><span>Username</span><b class="mono">' + esc(a.username) + '</b></div><div><span>Password</span><b class="mono">' + esc(a.password) + '</b></div></div>',
+    actions: [{ label: ic('copy') + ' Salin', onClick: function () { try { navigator.clipboard.writeText(txt); toast('Username & password disalin.', 'ok'); } catch (e) { toast('Salin manual dari layar.', 'warn'); } return false; } }, { label: 'Selesai', cls: 'btn-primary', value: true }] });
+}
 // sinkronkan total bobot setelah render tab KPI
 (function () { var orig = App.pages.master.render; App.pages.master.render = function (el) { orig.call(this, el); if (this.tab === 'kpi') this.kpiTotal(el); }; })();
 
@@ -423,7 +498,7 @@ var LOG_LABEL = {
   UBAH_DATA: 'Ubah data SROI', BUAT_PROYEK: 'Buat perhitungan', SALIN_PROYEK: 'Salin perhitungan', HAPUS_PROYEK: 'Hapus perhitungan',
   KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci',
   UNGGAH_BERKAS: 'Unggah berkas', HAPUS_BERKAS: 'Hapus berkas', GANTI_PASSWORD: 'Ganti password', RESET_PASSWORD: 'Reset password',
-  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', HAPUS_KPI: 'Hapus KPI',
+  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
   UBAH_PARAMETER: 'Ubah parameter', UBAH_UMK_BUDGET: 'Ubah UMK & budget', UBAH_TAMPILAN: 'Ubah tampilan', BERSIHKAN_LOG: 'Bersihkan log',
   TAMBAH_CABANG: 'Tambah cabang', UBAH_CABANG: 'Ubah cabang', HAPUS_CABANG: 'Hapus cabang', TAMBAH_SEKTOR: 'Tambah sektor', UBAH_SEKTOR: 'Ubah sektor', HAPUS_SEKTOR: 'Hapus sektor',
   TAMBAH_PROGRAM: 'Tambah program', UBAH_PROGRAM: 'Ubah program', HAPUS_PROGRAM: 'Hapus program', HAPUS_CABANG_TAHUN: 'Hapus UMK & budget'

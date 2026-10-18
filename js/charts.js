@@ -12,7 +12,7 @@ var Charts = {
     opt = opt || {};
     if (!rows.length) return '<div class="empty">' + ic('bar-chart') + '<div>Belum ada data disetujui untuk ditampilkan.</div></div>';
     var W = 640, L = 112, R = 92, rowH = 34, top = 8, H = top + rows.length * rowH + 8;
-    var max = Math.max(opt.ref || 0, Math.max.apply(null, rows.map(function (r) { return r.value; }))) * 1.08 || 1;
+    var max = Math.max(opt.ref || 0, Math.max.apply(null, rows.map(function (r) { return Math.max(r.value, r.target || 0); }))) * 1.08 || 1;
     var sx = function (v) { return L + (W - L - R) * Math.max(0, v) / max; };
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img">';
     rows.forEach(function (r, i) {
@@ -20,6 +20,7 @@ var Charts = {
       s += '<text x="' + (L - 10) + '" y="' + (y + 20) + '" text-anchor="end" font-size="12.5" font-weight="500" fill="' + (r.color === '#DC2626' ? '#DC2626' : '#1A2433') + '">' + esc(trunc(r.label, 15)) + '</text>';
       s += '<rect x="' + L + '" y="' + (y + 6) + '" width="' + (W - L - R) + '" height="20" rx="3" fill="#F1F5F9"/>';
       s += '<rect x="' + L + '" y="' + (y + 6) + '" width="' + Math.max(2, sx(r.value) - L) + '" height="20" rx="3" fill="' + (r.color || tp()) + '"><title>' + esc(r.label) + ': ' + esc((opt.fmt || fmtNum)(r.value)) + '</title></rect>';
+      if (r.target) { var tx = sx(r.target); s += '<rect x="' + (tx - 2) + '" y="' + (y + 2) + '" width="4" height="28" rx="1.5" fill="#E8A317" stroke="#fff" stroke-width="1"><title>Target ' + esc(r.label) + ': ' + esc((opt.fmt || fmtNum)(r.target)) + '</title></rect>'; }
       s += '<text x="' + (W - 4) + '" y="' + (y + 20) + '" text-anchor="end" font-size="12.5" font-weight="700" fill="' + (r.color === '#DC2626' ? '#DC2626' : '#1A2433') + '" style="font-feature-settings:\'tnum\'">' + esc((opt.fmt || fmtNum)(r.value)) + (r.note ? ' ' + esc(r.note) : '') + '</text>';
     });
     if (opt.ref) {
@@ -65,7 +66,7 @@ var Charts = {
     opt = opt || {};
     if (!pts.length) return '<div class="empty">' + ic('trending-up') + '<div>Belum ada riwayat tahun yang disetujui.</div></div>';
     var W = opt.wide ? 1000 : 640, H = opt.wide ? 250 : 230, L = 40, R = 24, T = 24, B = 34;
-    var maxY = Math.max(opt.target || 0, Math.max.apply(null, pts.map(function (p) { return p.y; }))) * 1.2 || 1;
+    var maxY = Math.max(opt.target || 0, Math.max.apply(null, pts.map(function (p) { return Math.max(p.y || 0, p.t || 0); }))) * 1.2 || 1;
     var sx = function (i) { return pts.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (pts.length - 1); };
     var sy = function (v) { return T + (H - T - B) * (1 - v / maxY); };
     var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img"><defs><linearGradient id="lgA" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="' + tp() + '" stop-opacity=".18"/><stop offset="1" stop-color="' + tp() + '" stop-opacity="0"/></linearGradient></defs>';
@@ -74,10 +75,19 @@ var Charts = {
       s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="#EEF2F7"/>';
       s += '<text x="' + (L - 8) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="10.5" fill="#94A3B8">' + fmtNum(yv, 1) + '</text>';
     }
-    if (opt.target) {
-      var ty = sy(opt.target);
-      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + ty + '" y2="' + ty + '" stroke="#E8A317" stroke-width="1.5" stroke-dasharray="6 4"/>';
-      s += '<text x="' + (W - R) + '" y="' + (ty - 6) + '" text-anchor="end" font-size="10.5" fill="#B45309" font-weight="600">' + esc(opt.targetLabel || 'Target') + '</text>';
+    var hasT = pts.some(function (p) { return p.t; });
+    if (opt.target) {   // garis acuan (titik impas / batas bintang); merah bila ada garis target per tahun agar tidak tertukar
+      var ty = sy(opt.target), rc = hasT ? '#DC2626' : '#E8A317', rt = hasT ? '#DC2626' : '#B45309';
+      s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + ty + '" y2="' + ty + '" stroke="' + rc + '" stroke-width="1.2" stroke-dasharray="' + (hasT ? '3 3' : '6 4') + '"/>';
+      s += '<text x="' + (W - R) + '" y="' + (ty - 6) + '" text-anchor="end" font-size="10.5" fill="' + rt + '" font-weight="600">' + esc(opt.targetLabel || 'Target') + '</text>';
+    }
+    var tg = pts.map(function (p, i) { return p.t ? [sx(i), sy(p.t), p.t] : null; });
+    if (tg.some(Boolean)) {   // garis target per tahun (amber putus-putus)
+      var td = '', pen = false;
+      tg.forEach(function (q) { if (!q) { pen = false; return; } td += (pen ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1); pen = true; });
+      if (tg.filter(Boolean).length === 1) { var q1 = tg.filter(Boolean)[0]; td = 'M' + (q1[0] - 32) + ' ' + q1[1] + 'L' + (q1[0] + 32) + ' ' + q1[1]; }
+      s += '<path d="' + td + '" fill="none" stroke="#E8A317" stroke-width="2" stroke-dasharray="6 4"/>';
+      tg.forEach(function (q) { if (!q) return; s += '<rect x="' + (q[0] - 4) + '" y="' + (q[1] - 4) + '" width="8" height="8" transform="rotate(45 ' + q[0] + ' ' + q[1] + ')" fill="#E8A317"><title>Target ' + fmtNum(q[2], 2) + '</title></rect><text x="' + (q[0] + 36) + '" y="' + (q[1] + 4) + '" font-size="10.5" fill="#B45309" font-weight="700">Target ' + fmtNum(q[2], 2) + '</text>'; });
     }
     var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + sx(i).toFixed(1) + ' ' + sy(p.y).toFixed(1); }).join('');
     if (pts.length > 1) s += '<path d="' + d + 'L' + sx(pts.length - 1) + ' ' + (H - B) + 'L' + sx(0) + ' ' + (H - B) + 'Z" fill="url(#lgA)"/>';

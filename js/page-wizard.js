@@ -486,6 +486,7 @@ function updatePanel() {
     '<div style="margin:4px 0 12px">' + starsHtml(r.bintang) + ' <span class="small b">' + esc(r.bintangLabel) + '</span></div>' +
     '<div class="pv"><span>Total Investasi (PV)</span><b>' + rp(r.pvInvestasi) + '</b></div><div class="pv"><span>Total Impact (PV)</span><b class="text-green">' + rp(r.pvImpact) + '</b></div>' +
     '<div class="pv"><span>Rasio bersih</span><b>' + fmtNum(r.rasioBersih, 2) + '</b></div>' +
+    (function () { var pp = W.data.proyek, t = M.targetCabang(pp.tahun, pp.cabang_id); return t ? '<div class="pv"><span>' + ic('target') + ' Target SROI ' + pp.tahun + '</span><b class="' + (r.rasio >= t ? 'text-green' : '') + '">' + fmtNum(t, 2) + (r.rasio >= t ? ' ✓' : ' (' + pctFmt(r.rasio / t, 0) + ')') + '</b></div>' : ''; })() +
     '<div class="val-box" data-go="8">' + (r.errors.length ? '<span class="text-red b">' + ic('alert') + ' ' + r.errors.length + ' kesalahan</span>' : '<span class="text-green b">' + ic('check-circle') + ' Validasi lolos</span>') + '<span class="muted">' + r.warnings.length + ' peringatan</span></div>' +
     (top.length ? '<div class="mini"><div class="small b" style="color:var(--primary-dark)">Sebaran manfaat</div>' + top.map(function (s) { return '<div class="mrow"><div class="row between"><span>' + esc(trunc(s.nama, 22)) + '</span><b>' + pctFmt(s.porsi, 0) + '</b></div><div class="bar"><i style="width:' + (s.porsi * 100) + '%"></i></div></div>'; }).join('') + '</div>' : '');
   pm.innerHTML = '<div><small>Rasio SROI</small><div class="pm-r">' + fmtNum(r.rasio, 2) + ' : 1</div></div><div>' + starsHtml(r.bintang, 'sm') + '<small>' + esc(r.bintangLabel) + '</small></div><div class="grow"></div><div class="r"><small>PV Impact</small><b>' + rpShort(r.pvImpact) + '</b></div><div class="r"><small>Validasi</small><b>' + (r.errors.length ? '⚠ ' + r.errors.length : '✓') + '</b></div>';
@@ -780,7 +781,8 @@ async function deleteBerkas(bid, btn) {
 /* =====================================================================
  * CATATAN ADMIN per langkah — admin menulis (mode baca data), cabang menanggapi
  * ===================================================================== */
-function allNotes() { return (W.data && W.data.catatan) || []; }
+var NOTE_STEPS = 7;   // catatan admin hanya untuk langkah isian cabang (1–7)
+function allNotes() { return ((W.data && W.data.catatan) || []).filter(function (c) { return Number(c.step) >= 1 && Number(c.step) <= NOTE_STEPS; }); }
 function stepNotes(n) { return allNotes().filter(function (c) { return Number(c.step) === n; }).sort(function (a, b) { return String(a.dibuat_at).localeCompare(String(b.dibuat_at)); }); }
 function openNotes(n) { return stepNotes(n).filter(function (c) { return c.status !== 'Selesai'; }); }
 function notesBanner() {
@@ -789,7 +791,7 @@ function notesBanner() {
   var steps = {}; open.forEach(function (c) { steps[c.step] = (steps[c.step] || 0) + 1; });
   var links = Object.keys(steps).sort().map(function (n) { return '<button class="btn btn-xs" data-go="' + n + '">Langkah ' + n + ' (' + steps[n] + ')</button>'; }).join(' ');
   return App.me.role === 'CABANG'
-    ? '<div class="banner banner-amber">' + ic('info') + '<div><b>' + open.length + ' catatan perbaikan dari pusat belum ditindaklanjuti</b><p>Perbaiki datanya, lalu klik <b>Tandai sudah diperbaiki</b> pada tiap catatan.</p><div class="row mt-s" style="gap:6px">' + links + '</div></div></div>'
+    ? '<div class="banner banner-amber">' + ic('info') + '<div><b>' + open.length + ' catatan perbaikan dari pusat belum ditindaklanjuti</b><p>Perbaiki datanya, lalu klik <b>Konfirmasi sudah dikerjakan</b>. Catatan yang sudah dikonfirmasi otomatis hilang dari langkah.</p><div class="row mt-s" style="gap:6px">' + links + '</div></div></div>'
     : '<div class="banner banner-blue">' + ic('info') + '<div><b>' + open.length + ' catatan Anda masih terbuka</b><div class="row mt-s" style="gap:6px">' + links + '</div></div></div>';
 }
 function noteItem(c, role) {
@@ -801,18 +803,17 @@ function noteItem(c, role) {
   var body = '<div class="note-isi">' + esc(c.isi).replace(/\n/g, '<br>') + '</div>';
   var resp = c.tanggapan || c.ditanggapi_at ? '<div class="note-resp">' + ic('send') + '<div><b>Tanggapan cabang</b> <span class="small muted">' + esc(c.ditanggapi_oleh || '') + ' • ' + fmtDate(c.ditanggapi_at) + '</span><div>' + esc(c.tanggapan || '(tanpa keterangan)') + '</div></div></div>' : '';
   var form = '';
-  if (role === 'CABANG') form = done
-    ? '<div class="row mt-s"><button class="btn btn-xs" data-note="undo" data-id="' + c.catatan_id + '">Batalkan tanda selesai</button></div>'
-    : '<div class="row mt-s" style="align-items:flex-end"><input class="inp grow" id="resp_' + c.catatan_id + '" placeholder="Tanggapan / apa yang sudah diperbaiki (opsional)" maxlength="1000"><button class="btn btn-sm btn-success" data-note="done" data-id="' + c.catatan_id + '">' + ic('check') + ' Tandai sudah diperbaiki</button></div>';
+  if (role === 'CABANG') form = '<div class="row mt-s" style="align-items:flex-end"><input class="inp grow" id="resp_' + c.catatan_id + '" placeholder="Keterangan perbaikan untuk admin (opsional)" maxlength="1000"><button class="btn btn-sm btn-success" data-note="done" data-id="' + c.catatan_id + '">' + ic('check') + ' Konfirmasi sudah dikerjakan</button></div>';
   return '<div class="note' + (done ? ' done' : '') + '">' + head + body + resp + form + '</div>';
 }
 function notesHtml(step) {
   var role = App.me.role, list = stepNotes(step);
-  if (role === 'STAKEHOLDER') return '';
+  if (role === 'STAKEHOLDER' || step > NOTE_STEPS) return '';
+  if (role === 'CABANG') list = list.filter(function (c) { return c.status !== 'Selesai'; });   // yang sudah dikonfirmasi disembunyikan
   if (role === 'CABANG' && !list.length) return '';
   var title = role === 'ADMIN' ? 'Catatan Admin — Langkah ' + step : 'Catatan Perbaikan dari Pusat — Langkah ' + step;
   var form = role === 'ADMIN' ? '<div class="note-new"><textarea class="inp" id="noteNew" rows="3" maxlength="1500" placeholder="Tulis catatan perbaikan untuk cabang pada langkah ini…"></textarea><div class="row" style="justify-content:flex-end"><button class="btn btn-primary btn-sm" data-note="add">' + ic('send') + ' Kirim catatan ke cabang</button></div></div>' : '';
-  return '<div class="card notes-card ro-ok' + (role === 'CABANG' ? ' notes-cabang' : '') + '"><div class="card-head"><div><h3>' + ic(role === 'ADMIN' ? 'edit' : 'info') + ' ' + esc(title) + '</h3><p>' + (role === 'ADMIN' ? 'Data cabang hanya bisa dilihat. Catatan langsung muncul di akun cabang pada langkah ini.' : 'Tindak lanjuti catatan berikut, lalu tandai sudah diperbaiki.') + '</p></div>' + (list.length ? '<span class="badge ' + (openNotes(step).length ? 'st-Dikirim' : 'st-Disetujui') + '">' + openNotes(step).length + ' terbuka / ' + list.length + ' catatan</span>' : '') + '</div>' +
+  return '<div class="card notes-card ro-ok' + (role === 'CABANG' ? ' notes-cabang' : '') + '"><div class="card-head"><div><h3>' + ic(role === 'ADMIN' ? 'edit' : 'info') + ' ' + esc(title) + '</h3><p>' + (role === 'ADMIN' ? 'Data cabang hanya bisa dilihat. Catatan langsung muncul di akun cabang pada langkah ini.' : 'Kerjakan catatan berikut, lalu klik Konfirmasi sudah dikerjakan — catatan akan hilang dari langkah ini.') + '</p></div>' + (list.length ? '<span class="badge ' + (openNotes(step).length ? 'st-Dikirim' : 'st-Disetujui') + '">' + (role === 'CABANG' ? list.length + ' perlu dikerjakan' : openNotes(step).length + ' terbuka / ' + list.length + ' catatan') + '</span>' : '') + '</div>' +
     '<div class="card-pad" style="padding-top:0">' + (list.length ? list.map(function (c) { return noteItem(c, role); }).join('') : '<div class="small muted mb-s">Belum ada catatan pada langkah ini.</div>') + form + '</div></div>';
 }
 function applyNote(row, removeId) {
@@ -842,6 +843,7 @@ async function noteAction(kind, id, btn) {
   if (kind === 'close' || kind === 'reopen') return withBtn(btn, async function () { var r = await api('updateCatatan', { catatan_id: id, status: kind === 'close' ? 'Selesai' : 'Terbuka' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); });
   if (kind === 'done' || kind === 'undo') {
     var tg = kind === 'done' ? (($('#resp_' + id) || {}).value || '') : c.tanggapan;
-    return withBtn(btn, async function () { var r = await api('tanggapiCatatan', { catatan_id: id, tanggapan: tg, selesai: kind === 'done' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast(kind === 'done' ? 'Ditandai sudah diperbaiki. Admin akan melihatnya.' : 'Tanda selesai dibatalkan.', 'ok'); });
+    if (kind === 'done' && !(await confirmBox('Konfirmasi catatan sudah dikerjakan?', 'Catatan <b>"' + esc(String(c.isi).slice(0, 120)) + '"</b> akan ditandai selesai dan hilang dari tampilan langkah ' + c.step + '. Admin tetap bisa melihatnya beserta keterangan Anda.', ic('check') + ' Konfirmasi', 'btn-success'))) return;
+    return withBtn(btn, async function () { var r = await api('tanggapiCatatan', { catatan_id: id, tanggapan: tg, selesai: kind === 'done' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast(kind === 'done' ? 'Catatan dikonfirmasi sudah dikerjakan.' : 'Tanda selesai dibatalkan.', 'ok'); });
   }
 }

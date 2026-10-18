@@ -235,6 +235,10 @@ var M = {
   /** KPI berlaku utk cabang+tahun: KPI khusus cabang, bila tidak ada → template baku */
   kpi: function (th, cid) { var own = M.kpiSet(th, cid || ''); return own.length || !cid ? own : M.kpiSet(th, ''); },
   kpiSet: function (th, cid) { return (App.master.kpi || []).filter(function (k) { return Number(k.tahun) === Number(th) && String(k.cabang_id || '') === String(cid || ''); }).sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); },
+  /* Target SROI: cabang khusus → seragam; nasional → NASIONAL → seragam. 0 = belum ditetapkan */
+  tgtRow: function (th, key) { return (App.master.target_sroi || []).filter(function (r) { return Number(r.tahun) === Number(th) && String(r.cabang_id || '') === key; })[0]; },
+  targetCabang: function (th, cid) { var r = M.tgtRow(th, String(cid || '')) || M.tgtRow(th, ''); return r ? N(r.target) : 0; },
+  targetNasional: function (th) { var r = M.tgtRow(th, 'NASIONAL') || M.tgtRow(th, ''); return r ? N(r.target) : 0; },
   ct: function (cid, th) { return (App.master.cabang_tahun || []).filter(function (r) { return String(r.cabang_id) === String(cid) && Number(r.tahun) === Number(th); })[0] || {}; },
   params: function (th) {
     var p = {};
