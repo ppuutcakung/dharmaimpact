@@ -23,8 +23,8 @@ var ProyekUI = {
           var ct = M.ct(cid, th), dup = (App.proyek || []).some(function (p) { return String(p.cabang_id) === String(cid) && Number(p.tahun) === th; });
           var msg = dup ? ['banner-red', 'Perhitungan cabang ini untuk tahun ' + th + ' sudah ada.'] :
             (!N(ct.umk) || !N(ct.budget_program)) ? ['banner-amber', 'UMK & budget cabang tahun ' + th + ' belum diatur Super Admin. Perhitungan belum bisa dibuat.'] :
-            !M.kpi(th).length ? ['banner-amber', 'KPI tahun ' + th + ' belum diatur di Data Induk.'] :
-            ['banner-blue', 'Budget ' + rp(ct.budget_program) + ' • UMK ' + rp(ct.umk) + ' • ' + M.kpi(th).length + ' KPI'];
+            !M.kpi(th, cid).length ? ['banner-amber', 'KPI cabang tahun ' + th + ' belum diatur di Data Induk.'] :
+            ['banner-blue', 'Budget ' + rp(ct.budget_program) + ' • UMK ' + rp(ct.umk) + ' • ' + M.kpi(th, cid).length + ' KPI'];
           bg.querySelector('#nInfo').innerHTML = '<div class="banner ' + msg[0] + '" style="margin:6px 0 0">' + ic('info') + '<div><p style="margin:0">' + esc(msg[1]) + '</p></div></div>';
           bg.querySelector('#nGo').disabled = msg[0] !== 'banner-blue';
         };
@@ -62,7 +62,7 @@ registerPage('proyek', {
       if (t.dataset.act === 'new') ProyekUI.openNew();
       if (t.dataset.act === 'open') go('wizard', t.dataset.id);
       if (t.dataset.act === 'del') {
-        if (!(await confirmBox('Hapus perhitungan?', 'Perhitungan Draft beserta seluruh isinya akan dihapus permanen.', 'Hapus', 'btn-danger'))) return;
+        if (!(await confirmBox('Hapus perhitungan?', 'Perhitungan beserta seluruh isinya dan berkas pendukungnya akan dihapus permanen.', 'Hapus', 'btn-danger'))) return;
         withBtn(t, async function () {
           var res = await api('deleteProyek', { proyek_id: t.dataset.id });
           if (!res.success) return toast(res.message, 'err');
@@ -87,7 +87,7 @@ registerPage('proyek', {
         var hx = N(p.hasil_pv_investasi) > 0, edit = ['Draft', 'Perlu Revisi'].indexOf(p.status) > -1;
         return '<tr><td class="b">' + p.tahun + '</td><td>' + esc(M.cabangName(p.cabang_id)) + '</td><td><a class="link" data-act="open" data-id="' + p.proyek_id + '">' + esc(p.nama_program) + '</a>' + (N(p.hasil_error) && edit ? '<span class="sub text-red">' + p.hasil_error + ' kesalahan validasi</span>' : '') + '</td>' +
           '<td class="r tnum b text-primary">' + (hx ? ratioFmt(N(p.hasil_rasio)) : '—') + '</td><td>' + (hx ? starsHtml(p.hasil_bintang, 'sm') : '—') + '</td><td class="c">' + badge(p.status) + '</td><td class="hide-sm small muted">' + fmtDate(p.diubah_at) + '<span class="sub">' + esc(p.diubah_oleh || '') + '</span></td>' +
-          '<td class="c nowrap"><button class="btn btn-sm ' + (edit ? 'btn-primary' : '') + '" data-act="open" data-id="' + p.proyek_id + '">' + ic(edit ? 'edit' : 'eye') + (edit ? ' Isi' : ' Lihat') + '</button>' + (App.me.role === 'ADMIN' && p.status === 'Draft' ? ' <button class="btn btn-icon btn-sm btn-danger" data-act="del" data-id="' + p.proyek_id + '" title="Hapus">' + ic('trash') + '</button>' : '') + '</td></tr>';
+          '<td class="c nowrap"><button class="btn btn-sm ' + (edit ? 'btn-primary' : '') + '" data-act="open" data-id="' + p.proyek_id + '">' + ic(edit ? 'edit' : 'eye') + (edit ? ' Isi' : ' Lihat') + '</button>' + ((App.me.role === 'ADMIN' ? p.status !== 'Disetujui' : p.status === 'Draft') ? ' <button class="btn btn-icon btn-sm btn-danger" data-act="del" data-id="' + p.proyek_id + '" title="Hapus">' + ic('trash') + '</button>' : '') + '</td></tr>';
       }).join('') : '<tr><td colspan="8"><div class="empty">' + ic('calculator') + '<div>Belum ada perhitungan. Klik <b>Hitung Baru</b> untuk memulai.</div></div></td></tr>') + '</tbody>';
   }
 });

@@ -36,7 +36,7 @@ registerPage('laporan', {
 registerPage('master', {
   roles: ['ADMIN'],
   init: function (el) {
-    this.tab = 'cabang'; this.kpiTh = new Date().getFullYear(); this.ctTh = new Date().getFullYear();
+    this.tab = 'cabang'; this.kpiTh = new Date().getFullYear(); this.kpiCab = ''; this.ctTh = new Date().getFullYear();
     el.innerHTML = '<div class="tabs" id="mTabs"></div><div id="mBody"></div>';
     var self = this;
     el.addEventListener('click', function (e) {
@@ -45,11 +45,12 @@ registerPage('master', {
     });
     el.addEventListener('change', function (e) {
       if (e.target.id === 'kpiTh') { self.kpiTh = +e.target.value; self.kpiRows = null; self.render(el); }
+      if (e.target.id === 'kpiCab') { self.kpiCab = e.target.value; self.kpiRows = null; self.render(el); }
       if (e.target.id === 'ctTh') { self.ctTh = +e.target.value; self.render(el); }
     });
     el.addEventListener('input', function (e) {
       var k = e.target.dataset.kpi; if (!k) return;
-      var p = k.split('|'); self.kpiRows[+p[0]][p[1]] = p[1] === 'bobot' ? parseID(e.target.value) : e.target.value; self.kpiTotal(el);
+      var p = k.split('|'); self.kpiRows[+p[0]][p[1]] = (p[1] === 'bobot' || p[1] === 'target') ? parseID(e.target.value) : e.target.value; self.kpiTotal(el);
     });
   },
   show: function (el) { setTitle('Data Induk & Parameter', 'Administrasi'); this.render(el); },
@@ -62,34 +63,48 @@ registerPage('master', {
     return '<div class="card"><div class="card-head"><div><h3>' + title + '</h3><p>' + desc + '</p></div><button class="btn btn-primary" data-m="add-' + kind + '">' + ic('plus') + ' ' + addLabel + '</button></div><div class="tbl-wrap"><table class="tbl"><thead><tr>' + cols.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '<th class="c">Status</th><th class="c">Aksi</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   },
   r_cabang: function () {
-    var rows = (App.master.cabang || []).map(function (c) { return '<tr><td class="b">' + esc(c.kode) + '</td><td>' + esc(c.nama_cabang) + '</td><td>' + esc(c.lokasi) + '</td><td>' + esc(c.pic || '—') + '</td><td class="c">' + (isTrue(c.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c"><button class="btn btn-sm" data-m="edit-cabang" data-id="' + c.cabang_id + '">' + ic('edit') + ' Ubah</button></td></tr>'; }).join('');
+    var rows = (App.master.cabang || []).map(function (c) { return '<tr><td class="b">' + esc(c.kode) + '</td><td>' + esc(c.nama_cabang) + '</td><td>' + esc(c.lokasi) + '</td><td>' + esc(c.pic || '—') + '</td><td class="c">' + (isTrue(c.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-cabang" data-id="' + c.cabang_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-cabang" data-id="' + c.cabang_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
     return this.simpleTable('Cabang', 'Data yang sudah dipakai tidak dihapus — cukup dinonaktifkan (B1).', ['Kode', 'Nama Cabang', 'Lokasi', 'PIC Koordinator'], rows, 'Tambah Cabang', 'cabang');
   },
   r_sektor: function () {
-    var rows = (App.master.sektor || []).map(function (s) { return '<tr><td>' + esc(s.nama_sektor) + '</td><td class="c">' + (isTrue(s.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c"><button class="btn btn-sm" data-m="edit-sektor" data-id="' + s.sektor_id + '">' + ic('edit') + ' Ubah</button></td></tr>'; }).join('');
+    var rows = (App.master.sektor || []).map(function (s) { return '<tr><td>' + esc(s.nama_sektor) + '</td><td class="c">' + (isTrue(s.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-sektor" data-id="' + s.sektor_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-sektor" data-id="' + s.sektor_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
     return this.simpleTable('Sektor Binaan', 'Sektor dipakai untuk KPI per sektor & daftar UMKM.', ['Nama Sektor'], rows, 'Tambah Sektor', 'sektor');
   },
   r_program: function () {
-    var rows = (App.master.program || []).slice().sort(function (a, b) { return N(a.urutan) - N(b.urutan); }).map(function (p) { return '<tr><td class="muted">' + esc(p.urutan) + '</td><td class="b">' + esc(p.nama_program) + '</td><td><span class="badge ' + (p.jenis === 'UTAMA' ? 'badge-info' : 'st-Draft') + '">' + esc(p.jenis) + '</span></td><td class="c">' + (isTrue(p.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c"><button class="btn btn-sm" data-m="edit-program" data-id="' + p.program_id + '">' + ic('edit') + ' Ubah</button></td></tr>'; }).join('');
+    var rows = (App.master.program || []).slice().sort(function (a, b) { return N(a.urutan) - N(b.urutan); }).map(function (p) { return '<tr><td class="muted">' + esc(p.urutan) + '</td><td class="b">' + esc(p.nama_program) + '</td><td><span class="badge ' + (p.jenis === 'UTAMA' ? 'badge-info' : 'st-Draft') + '">' + esc(p.jenis) + '</span></td><td class="c">' + (isTrue(p.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td><td class="c nowrap"><button class="btn btn-sm" data-m="edit-program" data-id="' + p.program_id + '">' + ic('edit') + ' Ubah</button> <button class="btn btn-icon btn-sm btn-danger" data-m="del-program" data-id="' + p.program_id + '" title="Hapus">' + ic('trash') + '</button></td></tr>'; }).join('');
     return this.simpleTable('Program', 'Kegiatan di wizard langkah 3 dikelompokkan per program.', ['Urutan', 'Nama Program', 'Jenis'], rows, 'Tambah Program', 'program');
   },
   r_ct: function () {
     var th = this.ctTh, ys = M.years(); if (ys.indexOf(th) < 0) ys.unshift(th); if (ys.indexOf(new Date().getFullYear() + 1) < 0) ys.unshift(new Date().getFullYear() + 1);
     return '<div class="card"><div class="card-head"><div><h3>UMK & Budget per Cabang per Tahun</h3><p>Wajib terisi sebelum cabang bisa membuat perhitungan tahun tersebut (B3).</p></div><select class="inp" id="ctTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div>' +
       '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>Cabang</th><th class="r" style="min-width:180px">UMK (Rp/bulan)</th><th class="r" style="min-width:200px">Budget Program (Rp)</th><th class="c">Aksi</th></tr></thead><tbody>' +
-      M.cabangAktif().map(function (c) { var r = M.ct(c.cabang_id, th); return '<tr><td class="b">' + esc(c.nama_cabang) + '<span class="sub">' + esc(c.lokasi || '') + '</span></td><td><input class="inp num" inputmode="decimal" id="umk_' + c.cabang_id + '" value="' + esc(numIn(r.umk, 0)) + '"></td><td><input class="inp num" inputmode="decimal" id="bud_' + c.cabang_id + '" value="' + esc(numIn(r.budget_program, 0)) + '"></td><td class="c"><button class="btn btn-sm btn-primary" data-m="save-ct" data-id="' + c.cabang_id + '">' + ic('save') + ' Simpan</button></td></tr>'; }).join('') +
+      M.cabangAktif().map(function (c) { var r = M.ct(c.cabang_id, th); return '<tr><td class="b">' + esc(c.nama_cabang) + '<span class="sub">' + esc(c.lokasi || '') + '</span></td><td><input class="inp num" inputmode="decimal" id="umk_' + c.cabang_id + '" value="' + esc(numIn(r.umk, 0)) + '"></td><td><input class="inp num" inputmode="decimal" id="bud_' + c.cabang_id + '" value="' + esc(numIn(r.budget_program, 0)) + '"></td><td class="c nowrap"><button class="btn btn-sm btn-primary" data-m="save-ct" data-id="' + c.cabang_id + '">' + ic('save') + ' Simpan</button>' + (r.cabang_id ? ' <button class="btn btn-icon btn-sm btn-danger" data-m="del-ct" data-id="' + c.cabang_id + '" title="Hapus UMK & budget tahun ini">' + ic('trash') + '</button>' : '') + '</td></tr>'; }).join('') +
       '</tbody></table></div></div>';
   },
   r_kpi: function () {
-    var th = this.kpiTh, ys = M.years(); [new Date().getFullYear() + 1].forEach(function (y) { if (ys.indexOf(y) < 0) ys.unshift(y); });
-    if (!this.kpiRows) this.kpiRows = M.kpi(th).map(function (k) { return { kpi_id: k.kpi_id, nama_kpi: k.nama_kpi, bobot: N(k.bobot), satuan: k.satuan }; });
-    var used = (App.proyek || []).some(function (p) { return Number(p.tahun) === th; });
-    return '<div class="card"><div class="card-head"><div><h3>KPI & Bobot Tahun ' + th + '</h3><p>Σ bobot wajib 100% — tombol simpan nonaktif bila belum (B2). Bobot dipakai otomatis di wizard (R8).</p></div><div class="row"><select class="inp" id="kpiTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select><button class="btn" data-m="kpi-copy">' + ic('copy') + ' Salin dari ' + (th - 1) + '</button></div></div>' +
-      (used ? '<div style="padding:0 22px"><div class="banner banner-amber">' + ic('alert') + '<div><p style="margin:0">Sudah ada perhitungan tahun ' + th + '. Mengubah nama boleh; menghapus KPI akan menghapus isian target/realisasinya di perhitungan Draft saat dibuka.</p></div></div></div>' : '') +
-      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:260px">Nama KPI</th><th class="r" style="min-width:110px">Bobot (%)</th><th style="min-width:120px">Satuan</th><th></th></tr></thead><tbody>' +
-      this.kpiRows.map(function (k, i) { return '<tr><td class="muted">' + (i + 1) + '</td><td><input class="inp" data-kpi="' + i + '|nama_kpi" value="' + esc(k.nama_kpi) + '"></td><td><input class="inp num" inputmode="decimal" data-kpi="' + i + '|bobot" value="' + esc(numIn(k.bobot, 2)) + '"></td><td><input class="inp" data-kpi="' + i + '|satuan" value="' + esc(k.satuan || '') + '"></td><td class="act"><button class="btn btn-icon btn-sm btn-ghost" data-m="kpi-del" data-i="' + i + '" style="color:var(--red-solid)">' + ic('trash') + '</button></td></tr>'; }).join('') +
-      '</tbody><tfoot><tr><td></td><td>Total bobot</td><td class="r" id="kpiTot">—</td><td colspan="2"></td></tr></tfoot></table></div>' +
-      '<div class="card-foot"><button class="btn btn-sm" data-m="kpi-add">' + ic('plus') + ' Tambah KPI</button><button class="btn btn-primary" data-m="kpi-save" id="kpiSave">' + ic('save') + ' Simpan KPI ' + th + '</button></div></div>';
+    var th = this.kpiTh, cid = this.kpiCab, ys = M.years(); [new Date().getFullYear() + 1].forEach(function (y) { if (ys.indexOf(y) < 0) ys.unshift(y); });
+    var own = M.kpiSet(th, cid), tpl = M.kpiSet(th, ''), usesTpl = cid && !own.length;
+    if (!this.kpiRows) this.kpiRows = (own.length ? own : (cid ? tpl : [])).map(function (k) { return { kpi_id: k.kpi_id, nama_kpi: k.nama_kpi, bobot: N(k.bobot), target: k.target === '' ? '' : N(k.target), satuan: k.satuan || '' }; });
+    var cabName = cid ? M.cabangName(cid) : 'Template Baku (semua cabang)';
+    var used = (App.proyek || []).some(function (p) { return Number(p.tahun) === th && (!cid || String(p.cabang_id) === String(cid)); });
+    var overview = '<div class="card mb"><div class="card-head"><div><h3>Status KPI per Cabang — Tahun ' + th + '</h3><p>Cabang tanpa KPI khusus otomatis memakai Template Baku. KPI satu cabang berlaku untuk seluruh sektor binaannya.</p></div></div><div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>Cabang</th><th>Sumber KPI</th><th class="r">Jumlah KPI</th><th class="c">Aksi</th></tr></thead><tbody>' +
+      '<tr><td class="b">Template Baku</td><td><span class="badge badge-info">Format baku</span></td><td class="r">' + tpl.length + '</td><td class="c"><button class="btn btn-sm' + (!cid ? ' btn-primary' : '') + '" data-m="kpi-pick" data-id="">' + ic('edit') + ' Atur</button></td></tr>' +
+      M.cabangAktif().map(function (c) { var o = M.kpiSet(th, c.cabang_id); return '<tr><td>' + esc(c.nama_cabang) + '</td><td>' + (o.length ? '<span class="badge st-Disetujui">KPI khusus cabang</span>' : '<span class="badge st-Draft">Memakai template baku</span>') + '</td><td class="r">' + (o.length || tpl.length) + '</td><td class="c"><button class="btn btn-sm' + (String(cid) === String(c.cabang_id) ? ' btn-primary' : '') + '" data-m="kpi-pick" data-id="' + c.cabang_id + '">' + ic('edit') + ' Atur</button></td></tr>'; }).join('') + '</tbody></table></div></div>';
+    return overview + '<div class="card"><div class="card-head"><div><h3>KPI & Bobot — ' + esc(cabName) + ' ' + th + '</h3><p>Σ bobot wajib 100%. Target = target akumulasi cabang (semua sektor); cabang membagi target & realisasinya ke tiap sektor di wizard.</p></div>' +
+      '<div class="row"><select class="inp" id="kpiTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+      '<select class="inp" id="kpiCab" style="width:auto"><option value="">Template Baku (semua cabang)</option>' + M.cabangAktif().map(function (c) { return '<option value="' + c.cabang_id + '"' + (String(cid) === String(c.cabang_id) ? ' selected' : '') + '>' + esc(c.nama_cabang) + '</option>'; }).join('') + '</select></div></div>' +
+      (usesTpl ? '<div style="padding:0 22px"><div class="banner banner-blue">' + ic('info') + '<div><p style="margin:0">Cabang ini belum punya KPI khusus — isian di bawah adalah salinan Template Baku. Ubah lalu <b>Simpan</b> untuk menjadikannya KPI khusus cabang.</p></div></div></div>' : '') +
+      (used ? '<div style="padding:0 22px"><div class="banner banner-amber">' + ic('alert') + '<div><p style="margin:0">Sudah ada perhitungan tahun ' + th + ' yang memakai KPI ini. Mengubah nama/bobot/target aman; menghapus KPI akan menghapus isian KPI tsb di perhitungan Draft saat dibuka. Perhitungan Disetujui tidak terpengaruh (memakai snapshot).</p></div></div></div>' : '') +
+      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:260px">Nama KPI</th><th class="r" style="min-width:100px">Bobot (%)</th><th class="r" style="min-width:120px">Target</th><th style="min-width:120px">Satuan</th><th class="c">Aksi</th></tr></thead><tbody>' +
+      (this.kpiRows.length ? this.kpiRows.map(function (k, i, arr) {
+        return '<tr><td class="muted">' + (i + 1) + '</td><td><input class="inp" data-kpi="' + i + '|nama_kpi" value="' + esc(k.nama_kpi) + '" placeholder="Nama KPI"></td><td><input class="inp num" inputmode="decimal" data-kpi="' + i + '|bobot" value="' + esc(numIn(k.bobot, 2)) + '"></td><td><input class="inp num" inputmode="decimal" data-kpi="' + i + '|target" value="' + esc(numIn(k.target, 2)) + '" placeholder="0"></td><td><input class="inp" list="satuanList" data-kpi="' + i + '|satuan" value="' + esc(k.satuan || '') + '" placeholder="UMKM / %"></td>' +
+          '<td class="c nowrap"><button class="btn btn-icon btn-sm btn-ghost" data-m="kpi-up" data-i="' + i + '" title="Naik"' + (i ? '' : ' disabled') + '>▲</button><button class="btn btn-icon btn-sm btn-ghost" data-m="kpi-down" data-i="' + i + '" title="Turun"' + (i < arr.length - 1 ? '' : ' disabled') + '>▼</button><button class="btn btn-icon btn-sm btn-ghost" data-m="kpi-del" data-i="' + i + '" title="Hapus" style="color:var(--red-solid)">' + ic('trash') + '</button></td></tr>';
+      }).join('') : '<tr><td colspan="6"><div class="empty">Belum ada KPI. Klik <b>Tambah KPI</b> atau salin.</div></td></tr>') +
+      '</tbody><tfoot><tr><td></td><td>Total bobot</td><td class="r" id="kpiTot">—</td><td colspan="3"></td></tr></tfoot></table></div>' +
+      '<datalist id="satuanList"><option value="UMKM"><option value="%"><option value="Rp"><option value="Orang"><option value="Laporan"><option value="Kegiatan"></datalist>' +
+      '<div class="card-foot"><div class="row"><button class="btn btn-sm" data-m="kpi-add">' + ic('plus') + ' Tambah KPI</button>' + (cid ? '<button class="btn btn-sm" data-m="kpi-copy-tpl">' + ic('copy') + ' Salin dari Template Baku</button>' : '') + '<button class="btn btn-sm" data-m="kpi-copy">' + ic('copy') + ' Salin dari ' + (th - 1) + '</button>' +
+      (own.length ? '<button class="btn btn-sm btn-danger" data-m="kpi-reset">' + ic('trash') + (cid ? ' Hapus KPI khusus (kembali ke template)' : ' Hapus Template Baku ' + th) + '</button>' : '') + '</div>' +
+      '<button class="btn btn-primary" data-m="kpi-save" id="kpiSave">' + ic('save') + ' Simpan KPI</button></div></div>';
   },
   kpiTotal: function (el) {
     var t = (this.kpiRows || []).reduce(function (a, k) { return a + (Number(k.bobot) || 0); }, 0), ok = Math.abs(t - 100) < 0.001;
@@ -144,19 +159,54 @@ registerPage('master', {
         self.after(); toast('UMK & budget ' + M.cabangName(cid) + ' ' + self.ctTh + ' tersimpan.', 'ok');
       });
     }
-    if (m === 'kpi-add') { this.kpiRows.push({ kpi_id: '', nama_kpi: '', bobot: 0, satuan: 'UMKM' }); return this.render(el); }
-    if (m === 'kpi-del') { this.kpiRows.splice(+btn.dataset.i, 1); return this.render(el); }
-    if (m === 'kpi-copy') {
-      var src = M.kpi(this.kpiTh - 1); if (!src.length) return toast('KPI tahun ' + (this.kpiTh - 1) + ' tidak ada.', 'warn');
-      this.kpiRows = src.map(function (k) { return { kpi_id: '', nama_kpi: k.nama_kpi, bobot: N(k.bobot), satuan: k.satuan }; }); toast('Disalin — periksa lalu simpan.', 'ok'); return this.render(el);
+    if (m === 'kpi-pick') { this.kpiCab = btn.dataset.id; this.kpiRows = null; this.render(el); var sc = $('#kpiCab', el); if (sc) sc.scrollIntoView({ block: 'center' }); return; }
+    if (m === 'kpi-add') { this.kpiRows.push({ kpi_id: '', nama_kpi: '', bobot: 0, target: '', satuan: 'UMKM' }); return this.render(el); }
+    if (m === 'kpi-del') {
+      var kd = this.kpiRows[+btn.dataset.i];
+      if (kd.nama_kpi && !(await confirmBox('Hapus KPI?', 'KPI <b>' + esc(kd.nama_kpi) + '</b> dihapus dari daftar. Perubahan berlaku setelah Simpan.', 'Hapus', 'btn-danger'))) return;
+      this.kpiRows.splice(+btn.dataset.i, 1); return this.render(el);
+    }
+    if (m === 'kpi-up' || m === 'kpi-down') { var i0 = +btn.dataset.i, j0 = m === 'kpi-up' ? i0 - 1 : i0 + 1, tmp = this.kpiRows[i0]; this.kpiRows[i0] = this.kpiRows[j0]; this.kpiRows[j0] = tmp; return this.render(el); }
+    if (m === 'kpi-copy' || m === 'kpi-copy-tpl') {
+      var src = m === 'kpi-copy' ? M.kpi(this.kpiTh - 1, this.kpiCab) : M.kpiSet(this.kpiTh, '');
+      if (!src.length) return toast(m === 'kpi-copy' ? 'KPI tahun ' + (this.kpiTh - 1) + ' tidak ada.' : 'Template baku tahun ini masih kosong.', 'warn');
+      var keepId = m === 'kpi-copy-tpl';
+      this.kpiRows = src.map(function (k) { return { kpi_id: keepId ? k.kpi_id : '', nama_kpi: k.nama_kpi, bobot: N(k.bobot), target: k.target === '' ? '' : N(k.target), satuan: k.satuan }; });
+      toast('Disalin — periksa lalu Simpan.', 'ok'); return this.render(el);
+    }
+    if (m === 'kpi-reset') {
+      var cn = this.kpiCab ? M.cabangName(this.kpiCab) : 'Template Baku';
+      if (!(await confirmBox('Hapus KPI ' + esc(cn) + ' ' + this.kpiTh + '?', this.kpiCab ? 'Cabang ini akan kembali memakai Template Baku.' : 'Cabang yang tidak punya KPI khusus tidak akan memiliki KPI tahun ini.', 'Hapus', 'btn-danger'))) return;
+      return withBtn(btn, async function () {
+        var res = await api('deleteKpi', { tahun: self.kpiTh, cabang_id: self.kpiCab });
+        if (!res.success) return toast(res.message, 'err');
+        App.master.kpi = App.master.kpi.filter(function (k) { return !(Number(k.tahun) === self.kpiTh && String(k.cabang_id || '') === String(self.kpiCab)); });
+        self.kpiRows = null; self.after(); self.render(el); toast('KPI dihapus.', 'ok');
+      });
     }
     if (m === 'kpi-save') {
-      if (this.kpiRows.some(function (k) { return !String(k.nama_kpi || '').trim(); })) return toast('Nama KPI tidak boleh kosong.', 'warn');
+      var bad = this.kpiRows.filter(function (k) { return !String(k.nama_kpi || '').trim() || !(N(k.target) > 0) || !String(k.satuan || '').trim(); });
+      if (bad.length) return toast('Lengkapi nama, target (> 0), dan satuan setiap KPI.', 'warn');
       return withBtn(btn, async function () {
-        var res = await api('saveKpi', { tahun: self.kpiTh, rows: self.kpiRows });
+        var res = await api('saveKpi', { tahun: self.kpiTh, cabang_id: self.kpiCab, rows: self.kpiRows });
         if (!res.success) return toast(res.message, 'err');
-        App.master.kpi = App.master.kpi.filter(function (k) { return Number(k.tahun) !== self.kpiTh; }).concat(res.data);
-        self.kpiRows = null; self.after(); self.render(el); toast('KPI ' + self.kpiTh + ' tersimpan.', 'ok');
+        App.master.kpi = App.master.kpi.filter(function (k) { return !(Number(k.tahun) === self.kpiTh && String(k.cabang_id || '') === String(self.kpiCab)); }).concat(res.data);
+        self.kpiRows = null; self.after(); self.render(el); toast('KPI ' + (self.kpiCab ? M.cabangName(self.kpiCab) : 'Template Baku') + ' ' + self.kpiTh + ' tersimpan.', 'ok');
+      });
+    }
+    if (/^del-(cabang|sektor|program|ct)$/.test(m)) {
+      var kind = m === 'del-ct' ? 'cabang_tahun' : m.slice(4), id = btn.dataset.id;
+      var label = kind === 'cabang' ? 'cabang ' + M.cabangName(id) : kind === 'sektor' ? 'sektor ' + M.sektorName(id) : kind === 'program' ? 'program ' + M.programName(id) : 'UMK & budget ' + M.cabangName(id) + ' tahun ' + self.ctTh;
+      if (!(await confirmBox('Hapus ' + esc(label) + '?', 'Data yang sudah dipakai di perhitungan tidak bisa dihapus — cukup dinonaktifkan lewat tombol Ubah.', 'Hapus', 'btn-danger'))) return;
+      return withBtn(btn, async function () {
+        var res = await api('deleteMaster', { kind: kind, id: id, tahun: self.ctTh });
+        if (!res.success) return toast(res.message, 'err');
+        var mm2 = App.master;
+        if (kind === 'cabang') { mm2.cabang = mm2.cabang.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.cabang_tahun = mm2.cabang_tahun.filter(function (x) { return String(x.cabang_id) !== String(id); }); mm2.kpi = mm2.kpi.filter(function (x) { return String(x.cabang_id || '') !== String(id); }); }
+        if (kind === 'sektor') mm2.sektor = mm2.sektor.filter(function (x) { return String(x.sektor_id) !== String(id); });
+        if (kind === 'program') mm2.program = mm2.program.filter(function (x) { return String(x.program_id) !== String(id); });
+        if (kind === 'cabang_tahun') mm2.cabang_tahun = mm2.cabang_tahun.filter(function (x) { return !(String(x.cabang_id) === String(id) && Number(x.tahun) === self.ctTh); });
+        self.after(); self.render(el); toast('Data dihapus.', 'ok');
       });
     }
     if (m === 'param-save') {
@@ -197,10 +247,17 @@ registerPage('users', {
     var rows = (App.users || []).slice().sort(function (a, b) { return a.role.localeCompare(b.role) || String(a.username).localeCompare(String(b.username)); });
     $('#uTbl', el).innerHTML = '<thead><tr><th>Nama Tampilan</th><th>Username</th><th>Peran</th><th>Cabang</th><th class="hide-sm">Login Terakhir</th><th class="c">Status</th><th class="c">Aksi</th></tr></thead><tbody>' +
       rows.map(function (u) { return '<tr><td><span class="row" style="gap:10px;flex-wrap:nowrap"><span class="avatar" style="width:30px;height:30px;font-size:11px">' + initials(u.nama_tampilan) + '</span><b>' + esc(u.nama_tampilan) + '</b></span></td><td class="tnum">' + esc(u.username) + '</td><td><span class="badge ' + (u.role === 'ADMIN' ? 'badge-info' : u.role === 'STAKEHOLDER' ? 'badge-amber' : 'st-Draft') + '">' + roleLabel(u.role) + '</span></td><td>' + (u.cabang_id ? esc(M.cabangName(u.cabang_id)) : '—') + '</td><td class="hide-sm small muted">' + fmtDate(u.last_login) + '</td><td class="c">' + (isTrue(u.aktif) ? '<span class="badge st-Disetujui">Aktif</span>' : '<span class="badge st-Draft">Nonaktif</span>') + '</td>' +
-        '<td class="c nowrap"><button class="btn btn-sm" data-u="edit" data-id="' + u.user_id + '">' + ic('edit') + '</button> <button class="btn btn-sm" data-u="reset" data-id="' + u.user_id + '" title="Reset password">' + ic('key') + '</button></td></tr>'; }).join('') + '</tbody>';
+        '<td class="c nowrap"><button class="btn btn-sm" data-u="edit" data-id="' + u.user_id + '">' + ic('edit') + '</button> <button class="btn btn-sm" data-u="reset" data-id="' + u.user_id + '" title="Reset password">' + ic('key') + '</button> <button class="btn btn-icon btn-sm btn-danger" data-u="del" data-id="' + u.user_id + '" title="Hapus akun">' + ic('trash') + '</button></td></tr>'; }).join('') + '</tbody>';
   },
-  act: function (el, a, id) {
+  act: async function (el, a, id) {
     var self = this;
+    if (a === 'del') {
+      var ud = App.users.filter(function (x) { return x.user_id === id; })[0];
+      if (!(await confirmBox('Hapus akun ' + esc(ud.username) + '?', 'Akun dihapus permanen dan sesinya langsung berakhir. Bila hanya ingin menghentikan sementara, gunakan Ubah → nonaktifkan.', 'Hapus', 'btn-danger'))) return;
+      var res = await api('deleteMaster', { kind: 'user', id: id });
+      if (!res.success) return toast(res.message, 'err');
+      App.users = res.data; saveBootCache(); self.render(el); return toast('Akun dihapus.', 'ok');
+    }
     if (a === 'reset') {
       var u0 = App.users.filter(function (x) { return x.user_id === id; })[0];
       return modal({

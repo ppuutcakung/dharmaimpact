@@ -204,7 +204,9 @@ var M = {
   sektorAktif: function () { return (App.master.sektor || []).filter(function (s) { return isTrue(s.aktif); }); },
   program: function () { return (App.master.program || []).filter(function (p) { return isTrue(p.aktif); }).sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); },
   programName: function (id) { var p = (App.master.program || []).filter(function (x) { return x.program_id === id; })[0]; return p ? p.nama_program : '—'; },
-  kpi: function (th) { return (App.master.kpi || []).filter(function (k) { return Number(k.tahun) === Number(th); }).sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); },
+  /** KPI berlaku utk cabang+tahun: KPI khusus cabang, bila tidak ada → template baku */
+  kpi: function (th, cid) { var own = M.kpiSet(th, cid || ''); return own.length || !cid ? own : M.kpiSet(th, ''); },
+  kpiSet: function (th, cid) { return (App.master.kpi || []).filter(function (k) { return Number(k.tahun) === Number(th) && String(k.cabang_id || '') === String(cid || ''); }).sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); },
   ct: function (cid, th) { return (App.master.cabang_tahun || []).filter(function (r) { return String(r.cabang_id) === String(cid) && Number(r.tahun) === Number(th); })[0] || {}; },
   params: function (th) {
     var p = {};
@@ -213,7 +215,7 @@ var M = {
     return p;
   },
   param: function (key, d) { var r = (App.master.parameter || []).filter(function (x) { return x.key === key && !x.tahun; })[0]; return r ? r.value : d; },
-  engineCtx: function (p) { var ct = M.ct(p.cabang_id, p.tahun); return { params: M.params(p.tahun), umk: ct.umk, budget: ct.budget_program, kpiMaster: M.kpi(p.tahun), sektor: App.master.sektor }; },
+  engineCtx: function (p) { var ct = M.ct(p.cabang_id, p.tahun); return { params: M.params(p.tahun), umk: ct.umk, budget: ct.budget_program, kpiMaster: M.kpi(p.tahun, p.cabang_id), sektor: App.master.sektor }; },
   years: function () {
     var ys = {}; var y = new Date().getFullYear(); ys[y] = 1; ys[y - 1] = 1;
     (App.proyek || []).forEach(function (p) { ys[p.tahun] = 1; });

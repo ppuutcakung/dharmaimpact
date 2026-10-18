@@ -147,10 +147,13 @@ var Exporter = {
         .concat(d.umkm.map(function (u, i) { var tot = 0, cells = kg.map(function (g) { var v = hm[u.umkm_id + '|' + g.kegiatan_id] || 0; tot += v; return v || ''; }); return [i + 1, u.nama_umkm, M.sektorName(u.sektor_id), u.status_khusus].concat(cells).concat([tot]); }));
       add('Detail Program', det, [6, 28, 16, 14].concat(kg.map(function () { return 12; })));
       // 6. Lampiran-Cost Structure
-      var secs = r.kpi.sektorIds, cs = [['Budget Program', Math.round(ctx.budget || 0)], ['UMK', Math.round(ctx.umk || 0)], [], ['KPI', 'Bobot %'].concat([].concat.apply([], secs.map(function (s) { var n = M.sektorName(s); return [n + ' Target', n + ' Realisasi', n + ' F1', n + ' F2']; }))).concat(['F3'])]
+      var secs = r.kpi.sektorIds, cs = [['Budget Program', Math.round(ctx.budget || 0)], ['UMK', Math.round(ctx.umk || 0)], ['Sektor dihitung', (r.kpi.dihitung || []).map(M.sektorName).join(', ')], [],
+        ['A. KPI CABANG (AKUMULASI)'], ['KPI', 'Bobot %', 'Target', 'Satuan', 'Realisasi', 'Capaian', 'Proksi Cabang']].concat(r.kpi.perKpi.map(function (k) { return [k.nama, k.bobot, k.targetCabang, k.satuan, k.realisasiCabang, +k.capaian.toFixed(4), Math.round(k.proksiCabang)]; }))
+        .concat([['Total', '', '', '', '', '', Math.round(r.kpi.totalCabang)], [], ['B. BREAKDOWN PER SEKTOR'], ['KPI', 'Bobot %'].concat([].concat.apply([], secs.map(function (s) { var n = M.sektorName(s); return [n + ' Target', n + ' Realisasi', n + ' F1', n + ' F2']; }))).concat(['F3'])])
         .concat(r.kpi.perKpi.map(function (k) { return [k.nama, k.bobot].concat([].concat.apply([], k.perSektor.map(function (c) { return [c.target, c.realisasi, +c.f1.toFixed(6), Math.round(c.f2)]; }))).concat([Math.round(k.total)]); }))
+        .concat([['Total proksi sektor dihitung (F3)', Math.round(r.kpi.total)]])
         .concat([[], ['Proporsi sektor (F17)'].concat(secs.map(function (s) { return M.sektorName(s) + ': ' + pctFmt(r.kpi.proporsiSektor[s] || 0, 2); }))]);
-      add('Lampiran-Cost Structure', cs, [28, 10].concat(secs.map(function () { return 14; })));
+      add('Lampiran-Cost Structure', cs, [30, 10].concat(secs.map(function () { return 14; })));
       X.writeFile(wb, 'SROI_' + fileSafe(cab.nama_cabang) + '_' + p.tahun + '.xlsx');
       toast('Excel diunduh.', 'ok');
     });

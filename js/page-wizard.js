@@ -77,18 +77,22 @@ function prepData() {
   var d = W.data, p = d.proyek, me = App.me, st = p.status, editable = st === 'Draft' || st === 'Perlu Revisi';
   W.ro = me.role === 'STAKEHOLDER' || !editable;
   ['stakeholder', 'kpi', 'kegiatan', 'umkm', 'kehadiran', 'biaya', 'omset', 'benchmark', 'manfaat', 'outcome', 'berkas'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
-  var kpis = M.kpi(p.tahun).map(function (k) { return k.kpi_id; });
-  if (kpis.length) { var before = d.kpi.length; d.kpi = d.kpi.filter(function (r) { return kpis.indexOf(r.kpi_id) > -1; }); if (d.kpi.length !== before && !W.ro) markDirty('kpi', true); }
-  var sek = {}; d.kpi.forEach(function (r) { sek[r.sektor_id] = 1; }); d.umkm.forEach(function (u) { if (u.sektor_id) sek[u.sektor_id] = 1; });
-  W.sektors = (App.master.sektor || []).map(function (s) { return s.sektor_id; }).filter(function (s) { return sek[s]; });
-  ensureKpiRows(); ensureOmsetRows();
   W.ctx = ctxForProyek(p);
+  var kpis = kpiList().map(function (k) { return k.kpi_id; });
+  if (kpis.length) { var before = d.kpi.length; d.kpi = d.kpi.filter(function (r) { return kpis.indexOf(r.kpi_id) > -1; }); if (d.kpi.length !== before && !W.ro) markDirty('kpi', true); }
+  var sek = {}; d.kpi.forEach(function (r) { if (r.sektor_id !== 'ALL') sek[r.sektor_id] = 1; }); d.umkm.forEach(function (u) { if (u.sektor_id) sek[u.sektor_id] = 1; });
+  W.sektors = (App.master.sektor || []).map(function (s) { return s.sektor_id; }).filter(function (s) { return sek[s]; });
+  if (p.sektor_dihitung == null) p.sektor_dihitung = '';
+  ensureKpiRows(); ensureOmsetRows();
   compute();
 }
 function ensureKpiRows() {
   var d = W.data, have = {}; d.kpi.forEach(function (r) { have[r.kpi_id + '~' + r.sektor_id] = 1; });
-  M.kpi(d.proyek.tahun).forEach(function (k) { W.sektors.forEach(function (s) { if (!have[k.kpi_id + '~' + s]) d.kpi.push({ kpi_id: k.kpi_id, sektor_id: s, target: '', realisasi: '' }); }); });
+  kpiList().forEach(function (k) { ['ALL'].concat(W.sektors).forEach(function (s) { if (!have[k.kpi_id + '~' + s]) d.kpi.push({ kpi_id: k.kpi_id, sektor_id: s, target: '', realisasi: '' }); }); });
 }
+function kpiList() { return ((W.ctx && W.ctx.kpiMaster) || []).slice().sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); }
+function dihitungList() { return String(W.data.proyek.sektor_dihitung || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+function setDihitung(list) { W.data.proyek.sektor_dihitung = W.sektors.filter(function (s) { return list.indexOf(s) > -1; }).join(','); markDirty('info'); }
 function ensureOmsetRows() {
   var d = W.data, have = {}; d.omset.forEach(function (o) { have[o.umkm_id] = 1; });
   var add = false;
@@ -193,26 +197,43 @@ var STEP_RENDER = {
   },
 
   2: function () {
-    var th = W.data.proyek.tahun, kpis = M.kpi(th), secs = W.sektors, kpiMap = {};
+    var th = W.data.proyek.tahun, kpis = kpiList(), secs = W.sektors, kpiMap = {}, dh = dihitungList();
     W.data.kpi.forEach(function (r) { kpiMap[r.kpi_id + '~' + r.sektor_id] = r; });
-    var chips = M.sektorAktif().map(function (s) { var on = secs.indexOf(s.sektor_id) > -1; return '<span class="chip ' + (on ? 'on' : '') + (W.ro ? '' : ' ed-chip') + '" data-sek="' + s.sektor_id + '">' + (on ? ic('check') : ic('plus')) + esc(s.nama_sektor) + '</span>'; }).join('');
-    var head1 = '<tr><th rowspan="2" style="min-width:190px">KPI</th><th rowspan="2" class="r">Bobot</th>' + secs.map(function (s) { return '<th colspan="3" class="c" style="border-left:1px solid var(--border)">' + esc(M.sektorName(s)) + '</th>'; }).join('') + '<th rowspan="2" class="r" style="border-left:1px solid var(--border)">Proksi KPI (F3)</th></tr>';
-    var head2 = '<tr>' + secs.map(function () { return '<th class="r" style="border-left:1px solid var(--border)">Target</th><th class="r">Realisasi</th><th class="r">Proksi (F2)</th>'; }).join('') + '</tr>';
-    var body = kpis.map(function (k) {
-      return '<tr><td class="b">' + esc(k.nama_kpi) + '<span class="sub">' + esc(k.satuan || '') + '</span></td><td class="r tnum">' + fmtNum(k.bobot, 2) + '%</td>' + secs.map(function (s) {
-        var key = k.kpi_id + '~' + s, r = kpiMap[key] || {};
-        return '<td style="border-left:1px solid var(--border);min-width:90px">' + inNum('kpi', key, 'target', r.target, 'dec') + '</td><td style="min-width:90px">' + inNum('kpi', key, 'realisasi', r.realisasi, 'dec') + '</td><td style="min-width:120px">' + calcCell('f2|' + key) + '</td>';
-      }).join('') + '<td style="border-left:1px solid var(--border);min-width:130px">' + calcCell('f3|' + k.kpi_id) + '</td></tr>';
-    }).join('');
-    var foot = '<tr><td colspan="2">Total proksi per sektor</td>' + secs.map(function (s) { return '<td colspan="3" class="r" style="border-left:1px solid var(--primary-line)" data-c="sekTot|' + s + '">—</td>'; }).join('') + '<td class="r" data-c="f3tot|">—</td></tr>' +
-      '<tr><td colspan="2">Proporsi sektor (F17)</td>' + secs.map(function (s) { return '<td colspan="3" class="r" data-c="f17|' + s + '">—</td>'; }).join('') + '<td></td></tr>';
-    return '<div class="grid g-3 mb" style="gap:14px"><div class="card card-pad"><div class="lbl-s">Budget Program (data induk)</div><div class="calc mt-s" style="font-size:18px;font-weight:700">' + ic('lock') + rp(W.ctx.budget) + '</div></div>' +
+    var B = 'border-left:1px solid var(--border)';
+    var info = '<div class="grid g-3 mb" style="gap:14px"><div class="card card-pad"><div class="lbl-s">Budget Program (data induk)</div><div class="calc mt-s" style="font-size:18px;font-weight:700">' + ic('lock') + rp(W.ctx.budget) + '</div></div>' +
       '<div class="card card-pad"><div class="lbl-s">UMK Cabang ' + th + '</div><div class="calc mt-s" style="font-size:18px;font-weight:700">' + ic('lock') + rp(W.ctx.umk) + '</div></div>' +
-      '<div class="card card-pad"><div class="lbl-s">Total Bobot KPI ' + th + '</div><div class="calc mt-s" style="font-size:18px;font-weight:700">' + ic('lock') + fmtNum(W.res.bobotTotal, 2) + '%</div></div></div>' +
-      cardSec('Sektor binaan yang dihitung', 'Klik sektor untuk menambah/menghapus kolom. Sektor UMKM di langkah 3 otomatis ikut.', '', '<div class="card-pad" style="padding-top:0"><div class="chips">' + chips + '</div></div>') +
-      cardSec('Target & Realisasi KPI per Sektor', 'Bobot & budget dikunci dari data induk (R8). F1 = bobot × (target sektor ÷ Σ target); F2 = (realisasi ÷ target) × budget × F1.', '',
-        secs.length && kpis.length ? '<div class="tbl-wrap"><table class="tbl edit">' + '<thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table></div>' :
-          '<div class="empty">' + (kpis.length ? 'Pilih minimal satu sektor di atas.' : 'KPI tahun ' + th + ' belum diatur Super Admin.') + '</div>', 'F1–F3, F17');
+      '<div class="card card-pad"><div class="lbl-s">Total Bobot KPI Cabang</div><div class="calc mt-s" style="font-size:18px;font-weight:700">' + ic('lock') + fmtNum(W.res.bobotTotal, 2) + '%</div></div></div>';
+    if (!kpis.length) return info + cardSec('KPI Cabang', '', '', '<div class="empty">KPI cabang tahun ' + th + ' belum diatur Super Admin.</div>');
+    // A. KPI cabang (akumulasi)
+    var a = cardSec('A. Capaian KPI Cabang (akumulasi semua sektor)', 'Bobot, target, dan satuan dikunci dari data induk. Isi <b>realisasi akumulasi</b> seluruh sektor. Proksi cabang = (realisasi ÷ target) × budget × bobot.', '',
+      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:200px">KPI</th><th class="r">Bobot</th><th class="r">Target</th><th>Satuan</th><th class="r" style="min-width:130px">Realisasi</th><th class="r">Capaian</th><th class="r" style="min-width:140px">Proksi Cabang</th></tr></thead><tbody>' +
+      kpis.map(function (k, i) {
+        var r = kpiMap[k.kpi_id + '~ALL'] || {};
+        return '<tr><td class="muted">' + (i + 1) + '</td><td class="b">' + esc(k.nama_kpi) + '</td><td class="r tnum">' + fmtNum(k.bobot, 2) + '%</td><td class="r tnum b">' + (N(k.target) ? fmtNum(k.target, 2) : '<span class="text-red">belum diatur</span>') + '</td><td>' + esc(k.satuan || '') + '</td>' +
+          '<td>' + inNum('kpi', k.kpi_id + '~ALL', 'realisasi', r.realisasi, 'dec') + '</td><td class="r tnum" data-c="cap|' + k.kpi_id + '">—</td><td>' + calcCell('f2c|' + k.kpi_id) + '</td></tr>';
+      }).join('') + '</tbody><tfoot><tr><td colspan="7">Total proksi KPI cabang</td><td class="r" data-c="f2cTot|">—</td></tr></tfoot></table></div>', 'Langkah 1');
+    // B. sektor binaan
+    var chips = M.sektorAktif().map(function (s) { var on = secs.indexOf(s.sektor_id) > -1; return '<span class="chip ' + (on ? 'on' : '') + '" data-sek="' + s.sektor_id + '">' + (on ? ic('check') : ic('plus')) + esc(s.nama_sektor) + '</span>'; }).join('');
+    var b = cardSec('B. Sektor Binaan Cabang', 'Pilih <b>semua</b> sektor binaan cabang agar pembagian bobot & budget adil. Sektor UMKM di langkah 3 otomatis ikut.', '', '<div class="card-pad" style="padding-top:0"><div class="chips">' + chips + '</div></div>');
+    // C. breakdown
+    var head1 = '<tr><th rowspan="2" style="min-width:190px">KPI</th><th rowspan="2" class="r">Target / Realisasi Cabang</th>' + secs.map(function (s) { return '<th colspan="3" class="c" style="' + B + '">' + esc(M.sektorName(s)) + (dh.indexOf(s) > -1 ? ' ✓' : '') + '</th>'; }).join('') + '<th rowspan="2" class="c" style="' + B + '">Cek Σ Sektor</th></tr>';
+    var head2 = '<tr>' + secs.map(function () { return '<th class="r" style="' + B + '">Target</th><th class="r">Realisasi</th><th class="r">Proksi (F2)</th>'; }).join('') + '</tr>';
+    var body = kpis.map(function (k) {
+      var m = kpiMap[k.kpi_id + '~ALL'] || {};
+      return '<tr><td class="b">' + esc(k.nama_kpi) + '<span class="sub">' + esc(k.satuan || '') + (/%/.test(k.satuan || '') ? ' • per sektor tidak dijumlah' : '') + '</span></td><td class="r tnum small nowrap" data-c="mtr|' + k.kpi_id + '">—</td>' + secs.map(function (s) {
+        var key = k.kpi_id + '~' + s, r = kpiMap[key] || {};
+        return '<td style="' + B + ';min-width:90px">' + inNum('kpi', key, 'target', r.target, 'dec') + '</td><td style="min-width:90px">' + inNum('kpi', key, 'realisasi', r.realisasi, 'dec') + '</td><td style="min-width:120px">' + calcCell('f2|' + key) + '</td>';
+      }).join('') + '<td class="c" style="' + B + ';min-width:120px" data-c="chk|' + k.kpi_id + '">—</td></tr>';
+    }).join('');
+    var foot = '<tr><td colspan="2">Total proksi per sektor</td>' + secs.map(function (s) { return '<td colspan="3" class="r" style="' + B + '" data-c="sekTot|' + s + '">—</td>'; }).join('') + '<td class="r" data-c="f3all|">—</td></tr>' +
+      '<tr><td colspan="2">Proporsi sektor (F17)</td>' + secs.map(function (s) { return '<td colspan="3" class="r" data-c="f17|' + s + '">—</td>'; }).join('') + '<td></td></tr>';
+    var c = cardSec('C. Breakdown KPI per Sektor', 'Bagi target & realisasi cabang ke tiap sektor. Untuk satuan selain %, jumlah semua sektor <b>wajib sama</b> dengan angka cabang. F1 = bobot × (target sektor ÷ Σ target); F2 = (realisasi ÷ target) × budget × F1.', '',
+      secs.length ? '<div class="tbl-wrap"><table class="tbl edit"><thead>' + head1 + head2 + '</thead><tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table></div>' : '<div class="empty">Pilih sektor binaan di bagian B.</div>', 'Langkah 2 • F1, F2, F17');
+    // D. sektor dihitung
+    var dChips = secs.map(function (s) { var on = dh.indexOf(s) > -1; return '<span class="chip ' + (on ? 'on' : '') + '" data-dh="' + s + '">' + (on ? ic('check') : ic('plus')) + esc(M.sektorName(s)) + ' <span class="tnum muted" data-c="sekTot|' + s + '">—</span></span>'; }).join('');
+    var dd = cardSec('D. Sektor yang Dihitung dalam SROI', 'Sesuai arahan pusat — hanya proksi sektor terpilih yang masuk nilai proksi KPI (F3) di Impact Map. Sektor lain tetap ikut menentukan pembagian bobot.', '',
+      '<div class="card-pad" style="padding-top:0">' + (secs.length ? '<div class="chips">' + dChips + '</div><div class="grid g-2 mt-s"><div><div class="lbl-s">Proksi KPI semua sektor</div><div class="calc mt-s" data-c="f3all|">—</div></div><div><div class="lbl-s">Proksi KPI sektor dihitung (F3)</div><div class="calc mt-s" style="font-weight:700" data-c="f3tot|">—</div></div></div>' : '<div class="muted small">Belum ada sektor binaan.</div>') + '</div>', 'Langkah 3 • F3');
+    return info + a + b + c + dd;
   },
 
   3: function () {
@@ -307,7 +328,7 @@ var STEP_RENDER = {
   },
 
   7: function () {
-    var d = W.data, kpis = M.kpi(d.proyek.tahun);
+    var d = W.data, kpis = kpiList();
     var JENIS = [['KPI_BUDGET', 'KPI × Budget (F3)'], ['BENCHMARK', 'Benchmark (F5)'], ['NET_PROFIT', 'Net Profit UMKM (F8)'], ['MANFAAT_SH', 'Manfaat Stakeholder'], ['MANUAL', 'Manual']];
     var cards = d.outcome.map(function (o, i) {
       var j = o.jenis_proksi, refs = String(o.ref_proksi || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
@@ -386,6 +407,12 @@ function calcText(type, key) {
     case 'f2': var ps = key.split('~'), kp = r.kpi.perKpi.filter(function (k) { return k.kpi_id === ps[0]; })[0]; var c = kp && kp.perSektor.filter(function (s) { return s.sektor_id === ps[1]; })[0]; return c ? rp(c.f2) : '—';
     case 'f3': var k3 = r.kpi.perKpi.filter(function (k) { return k.kpi_id === key; })[0]; return k3 ? rp(k3.total) : '—';
     case 'f3tot': return rp(r.kpi.total);
+    case 'f3all': return rp(r.kpi.totalSemua);
+    case 'f2c': var kc = r.kpi.perKpi.filter(function (k) { return k.kpi_id === key; })[0]; return kc ? rp(kc.proksiCabang) : '—';
+    case 'f2cTot': return rp(r.kpi.totalCabang);
+    case 'mtr': var km = r.kpi.perKpi.filter(function (k) { return k.kpi_id === key; })[0]; return km ? fmtNum(km.targetCabang, 2) + ' / ' + fmtNum(km.realisasiCabang, 2) : '—';
+    case 'cap': var kp2 = r.kpi.perKpi.filter(function (k) { return k.kpi_id === key; })[0]; return kp2 && kp2.targetCabang ? pctFmt(kp2.capaian, 1) : '—';
+    case 'chk': var kk = r.kpi.perKpi.filter(function (k) { return k.kpi_id === key; })[0]; if (!kk) return '—'; if (kk.isPct) return 'rata-rata'; return (Math.abs(kk.selisihTarget) < 1e-9 && Math.abs(kk.selisihReal) < 1e-9) ? '✓ Sesuai' : '⚠ T ' + fmtNum(kk.target, 2) + ' • R ' + fmtNum(kk.realisasi, 2);
     case 'sekTot': var t = 0; r.kpi.perKpi.forEach(function (k) { k.perSektor.forEach(function (s) { if (s.sektor_id === key) t += s.f2; }); }); return rp(t);
     case 'f17': return pctFmt(r.kpi.proporsiSektor[key] || 0, 2);
     case 'kegP': return fmtNum((r.kegiatanStat[key] || {}).peserta || 0);
@@ -416,6 +443,7 @@ function updateCalc() {
     var p = el.dataset.c.split('|'), t = p[0], k = p.slice(1).join('|');
     if (t === 'usage') { el.innerHTML = usageHtml(); return; }
     el.textContent = calcText(t, k);
+    if (t === 'chk') el.style.color = /⚠/.test(el.textContent) ? 'var(--red-solid)' : '#15803D';
   });
   updatePanel();
 }
@@ -479,7 +507,7 @@ function onWzChange(e) {
   var b = t.dataset.b.split('|');
   if (b[0] === 'biaya' && b[2] === 'metode') { var r = findRow('biaya', b[1]); if (t.value === 'WAKTU_TENAGA') { r.kelompok = 'Waktu & Tenaga'; if (!r.kegiatan_id) r.kegiatan_id = '*'; } }
   if (b[0] === 'outcome' && b[2] === 'jenis_proksi') { var o = findRow('outcome', b[1]); o.ref_proksi = (t.value === 'NET_PROFIT' || t.value === 'KPI_BUDGET' || t.value === 'BENCHMARK') ? 'ALL' : ''; }
-  if (b[0] === 'umkm' && b[2] === 'sektor_id' && t.value && W.sektors.indexOf(t.value) < 0) { W.sektors.push(t.value); sortSektors(); ensureKpiRows(); markDirty('kpi'); }
+  if (b[0] === 'umkm' && b[2] === 'sektor_id' && t.value && W.sektors.indexOf(t.value) < 0) { W.sektors.push(t.value); sortSektors(); ensureKpiRows(); markDirty('kpi'); setDihitung(dihitungList().concat([t.value])); }
   if (t.dataset.rr) { var y = window.scrollY; renderStep(); window.scrollTo(0, y); }
 }
 function onWzBlur(e) {
@@ -491,7 +519,7 @@ function sortSektors() { var ord = (App.master.sektor || []).map(function (s) { 
 /* ---------------- Event: klik ---------------- */
 function rerender() { var y = window.scrollY; renderStep(); window.scrollTo(0, y); }
 async function onWzClick(e) {
-  var t = e.target.closest('button,[data-go],[data-sek],[data-ref],[data-back]'); if (!t) return;
+  var t = e.target.closest('button,[data-go],[data-sek],[data-dh],[data-ref],[data-back]'); if (!t) return;
   var ds = t.dataset, d = W.data;
   if (ds.back !== undefined) { history.length > 1 ? history.back() : go(App.me.role === 'CABANG' ? 'cabang' : 'proyek'); return; }
   if (ds.step) return goStep(+ds.step);
@@ -512,9 +540,11 @@ async function onWzClick(e) {
       var filled = d.kpi.some(function (r) { return r.sektor_id === sid && (N(r.target) || N(r.realisasi)); });
       if (filled && !(await confirmBox('Hapus sektor?', 'Target & realisasi sektor ' + esc(M.sektorName(sid)) + ' akan dihapus.', 'Hapus', 'btn-danger'))) return;
       W.sektors.splice(i, 1); d.kpi = d.kpi.filter(function (r) { return r.sektor_id !== sid; });
-    } else { W.sektors.push(sid); sortSektors(); ensureKpiRows(); }
+      setDihitung(dihitungList().filter(function (x) { return x !== sid; }));
+    } else { W.sektors.push(sid); sortSektors(); ensureKpiRows(); setDihitung(dihitungList().concat([sid])); }
     markDirty('kpi'); return rerender();
   }
+  if (ds.dh) { var cur = dihitungList(), ix2 = cur.indexOf(ds.dh); if (ix2 > -1) cur.splice(ix2, 1); else cur.push(ds.dh); setDihitung(cur); return rerender(); }
   if (ds.ref) {
     var pr = ds.ref.split('|'), o = findRow('outcome', pr[0]), val = pr[1];
     var refs = String(o.ref_proksi || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
@@ -583,7 +613,7 @@ function pasteUmkm() {
           var c = l.split(/\t|;/), nm = (c[0] || '').trim(); if (!nm) return;
           var s = sek.filter(function (x) { return x.nama_sektor.toLowerCase() === String(c[1] || '').trim().toLowerCase(); })[0];
           W.data.umkm.push({ umkm_id: uid('UM'), nama_umkm: nm, sektor_id: s ? s.sektor_id : '', status_khusus: '' });
-          if (s && W.sektors.indexOf(s.sektor_id) < 0) W.sektors.push(s.sektor_id);
+          if (s && W.sektors.indexOf(s.sektor_id) < 0) { W.sektors.push(s.sektor_id); W.data.proyek.sektor_dihitung = dihitungList().concat([s.sektor_id]).join(','); W.infoDirty = ++W.ver; }
           added++;
         });
         sortSektors(); ensureKpiRows(); ensureOmsetRows(); markDirty('umkm'); markDirty('omset'); markDirty('kpi'); rerender();
@@ -606,10 +636,9 @@ function buildPayload() {
     if (s === 'kpi') rows = rows.filter(function (k) { return k.target !== '' || k.realisasi !== ''; });
     secs[s] = rows;
   });
-  var hasil = SroiEngine.summary(r), sek = {};
-  d.umkm.forEach(function (u) { if (u.sektor_id) sek[u.sektor_id] = 1; }); d.kpi.forEach(function (k) { if (N(k.realisasi) > 0) sek[k.sektor_id] = 1; });
-  hasil.hasil_sektor = Object.keys(sek).join(','); hasil.hasil_umkm = d.umkm.length;
-  var info = null; if (W.infoDirty) { info = {}; ['nama_program', 'project_owner', 'lokasi', 'gmaps_url', 'tgl_pengukuran', 'periode_awal', 'periode_akhir', 'mitra_pelaksana', 'pic_mitra', 'hp_pic', 'tujuan', 'nama_project', 'aktivitas', 'metode', 'mitra_penilai', 'tim_leader_penilai', 'hp_penilai', 'penjelasan_kualitatif', 'doc_number', 'doc_rev'].forEach(function (k) { info[k] = d.proyek[k]; }); }
+  var hasil = SroiEngine.summary(r);
+  hasil.hasil_sektor = (r.kpi.dihitung || []).join(','); hasil.hasil_umkm = d.umkm.length;
+  var info = null; if (W.infoDirty) { info = {}; ['nama_program', 'project_owner', 'lokasi', 'gmaps_url', 'tgl_pengukuran', 'periode_awal', 'periode_akhir', 'mitra_pelaksana', 'pic_mitra', 'hp_pic', 'tujuan', 'nama_project', 'aktivitas', 'metode', 'mitra_penilai', 'tim_leader_penilai', 'hp_penilai', 'penjelasan_kualitatif', 'doc_number', 'doc_rev', 'sektor_dihitung'].forEach(function (k) { info[k] = d.proyek[k]; }); }
   return { payload: { proyek_id: W.id, sections: secs, info: info, hasil: hasil }, sentVer: sentVer, infoVer: W.infoDirty, hasil: hasil };
 }
 async function saveNow(reason, btn) {

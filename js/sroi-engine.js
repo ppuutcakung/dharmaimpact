@@ -12,7 +12,7 @@
 var SroiEngine = (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
 
   /* ---------- util angka (data tersimpan: Number atau string "1234.5") ---------- */
   function n(v) {
@@ -75,33 +75,56 @@ var SroiEngine = (function () {
     var umkmById = {}; umkm.forEach(function (u) { umkmById[u.umkm_id] = u; });
     var shById = {}; sh.forEach(function (s) { shById[s.sh_id] = s; });
 
-    /* ---------- C2: KPI per sektor (F1–F3, F17) ---------- */
-    var sektorIds = [];
-    kpiRows.forEach(function (r) { if (r.sektor_id && sektorIds.indexOf(r.sektor_id) < 0) sektorIds.push(r.sektor_id); });
+    /* ---------- C2: KPI cabang → breakdown per sektor → sektor dihitung (F1–F3, F17) ----------
+     * Baris KPI_SEKTOR dengan sektor_id 'ALL' = realisasi akumulasi cabang (semua sektor).
+     * Target akumulasi berasal dari data induk KPI cabang (kpiMaster[].target).
+     * proyek.sektor_dihitung = daftar sektor (csv) yang masuk proksi SROI sesuai arahan pusat. */
+    var sektorIds = [], masterRow = {};
+    kpiRows.forEach(function (r) {
+      if (r.sektor_id === 'ALL') { masterRow[r.kpi_id] = r; return; }
+      if (r.sektor_id && sektorIds.indexOf(r.sektor_id) < 0) sektorIds.push(r.sektor_id);
+    });
+    var dihitung = String((data.proyek || {}).sektor_dihitung || '').split(',').map(function (x) { return x.trim(); })
+      .filter(function (x) { return x && sektorIds.indexOf(x) > -1; });
     var kpiCell = {}; // kpi_id|sektor_id → row
     kpiRows.forEach(function (r) { kpiCell[r.kpi_id + '|' + r.sektor_id] = r; });
-    var kpi = { perKpi: [], total: 0, cell: {}, realisasiSektor: {}, proporsiSektor: {}, sektorIds: sektorIds };
+    var kpi = { perKpi: [], total: 0, totalSemua: 0, totalCabang: 0, cell: {}, realisasiSektor: {}, proporsiSektor: {}, proksiSektor: {}, sektorIds: sektorIds, dihitung: dihitung };
     var realTotalAll = 0;
     kpiMaster.forEach(function (k) {
-      var sumTarget = 0;
-      sektorIds.forEach(function (s) { var c = kpiCell[k.kpi_id + '|' + s]; if (c) sumTarget += n(c.target); });
-      var item = { kpi_id: k.kpi_id, nama: k.nama_kpi, bobot: n(k.bobot), perSektor: [], total: 0, target: sumTarget, realisasi: 0 };
+      var isPct = /%/.test(String(k.satuan || ''));
+      var sumTarget = 0, sumReal = 0;
+      sektorIds.forEach(function (s) { var c = kpiCell[k.kpi_id + '|' + s]; if (c) { sumTarget += n(c.target); sumReal += n(c.realisasi); } });
+      var mT = n(k.target), mR = masterRow[k.kpi_id] ? n(masterRow[k.kpi_id].realisasi) : sumReal;
+      var mF2 = mT > 0 ? (mR / mT) * BUDGET * pct(k.bobot) : 0;                     // proksi KPI tingkat cabang
+      var item = { kpi_id: k.kpi_id, nama: k.nama_kpi, bobot: n(k.bobot), satuan: k.satuan || '', isPct: isPct,
+        targetCabang: mT, realisasiCabang: mR, capaian: mT > 0 ? mR / mT : 0, proksiCabang: mF2,
+        target: sumTarget, realisasi: sumReal, perSektor: [], total: 0, totalSemua: 0,
+        selisihTarget: isPct ? 0 : sumTarget - mT, selisihReal: isPct ? 0 : sumReal - mR };
       sektorIds.forEach(function (s) {
         var c = kpiCell[k.kpi_id + '|' + s] || {};
-        var t = n(c.target), rl = n(c.realisasi);
+        var t = n(c.target), rl = n(c.realisasi), on = dihitung.indexOf(s) > -1;
         var f1 = sumTarget > 0 ? pct(k.bobot) * (t / sumTarget) : 0;            // F1
         var f2 = t > 0 ? (rl / t) * BUDGET * f1 : 0;                              // F2
-        item.perSektor.push({ sektor_id: s, target: t, realisasi: rl, f1: f1, f2: f2 });
-        item.total += f2; item.realisasi += rl;
+        item.perSektor.push({ sektor_id: s, target: t, realisasi: rl, f1: f1, f2: f2, dihitung: on });
+        item.totalSemua += f2; if (on) item.total += f2;
         kpi.cell[k.kpi_id + '|' + s] = f2;
+        kpi.proksiSektor[s] = (kpi.proksiSektor[s] || 0) + f2;
         kpi.realisasiSektor[s] = (kpi.realisasiSektor[s] || 0) + rl;
         realTotalAll += rl;
-        if (t > 0 && rl > 2 * t) warnings.push({ step: 2, msg: 'Realisasi KPI "' + k.nama_kpi + '" melebihi 200% target pada salah satu sektor.' });
       });
-      kpi.total += item.total;                                                    // F3
+      if (!mT) errors.push({ step: 2, msg: 'Target KPI "' + k.nama_kpi + '" untuk cabang ini belum diatur Super Admin.' });
+      if (mT > 0 && mR > 2 * mT) warnings.push({ step: 2, msg: 'Realisasi KPI "' + k.nama_kpi + '" melebihi 200% target cabang.' });
+      if (sektorIds.length && !isPct) {
+        if (Math.abs(item.selisihTarget) > 1e-9) errors.push({ step: 2, msg: 'KPI "' + k.nama_kpi + '": jumlah target per sektor (' + fmtN(sumTarget) + ') belum sama dengan target cabang (' + fmtN(mT) + ').' });
+        if (masterRow[k.kpi_id] && Math.abs(item.selisihReal) > 1e-9) errors.push({ step: 2, msg: 'KPI "' + k.nama_kpi + '": jumlah realisasi per sektor (' + fmtN(sumReal) + ') belum sama dengan realisasi cabang (' + fmtN(mR) + ').' });
+      }
+      kpi.total += item.total;                                                    // F3 (hanya sektor dihitung)
+      kpi.totalSemua += item.totalSemua; kpi.totalCabang += mF2;
       kpi.perKpi.push(item);
     });
     sektorIds.forEach(function (s) { kpi.proporsiSektor[s] = realTotalAll > 0 ? kpi.realisasiSektor[s] / realTotalAll : 0; }); // F17
+    if (kpiMaster.length && !sektorIds.length) errors.push({ step: 2, msg: 'Breakdown KPI per sektor belum diisi (pilih sektor binaan cabang).' });
+    if (sektorIds.length && !dihitung.length) errors.push({ step: 2, msg: 'Belum ada sektor yang dipilih untuk dihitung dalam SROI.' });
     var bobotTotal = kpiMaster.reduce(function (a, k) { return a + n(k.bobot); }, 0);
 
     /* ---------- C3: kegiatan & kehadiran (R8: peserta dari KEHADIRAN) ---------- */
@@ -184,7 +207,8 @@ var SroiEngine = (function () {
       if (!o.sh_id || !shById[o.sh_id]) errors.push({ step: 7, msg: label + ': stakeholder belum dipilih.' });
       if (jenis === 'KPI_BUDGET') {
         var kpis = refs[0] === 'ALL' ? kpiMaster.map(function (k) { return k.kpi_id; }) : refs;
-        var secs = sektorFilter ? [sektorFilter] : sektorIds;
+        var secs = sektorFilter ? (dihitung.indexOf(sektorFilter) > -1 ? [sektorFilter] : []) : dihitung;
+        if (sektorFilter && !secs.length) warnings.push({ step: 7, msg: label + ': sektor stakeholder ini tidak termasuk sektor yang dihitung, proksi KPI = 0.' });
         kpis.forEach(function (kid) {
           var km = kpiMaster.filter(function (k) { return k.kpi_id === kid; })[0]; if (!km) return;
           secs.forEach(function (sid) {
@@ -296,6 +320,7 @@ var SroiEngine = (function () {
   function dedupe(list) {
     var seen = {}; return list.filter(function (e) { var k = e.step + e.msg; if (seen[k]) return false; seen[k] = 1; return true; });
   }
+  function fmtN(x) { return (Math.round(x * 100) / 100).toString().replace('.', ','); }
   function fmtPct(x) { return (Math.round(x * 100) / 100).toString().replace('.', ',') + '%'; }
 
   /** Ringkasan hasil untuk disimpan di sheet PROYEK (snapshot) */
