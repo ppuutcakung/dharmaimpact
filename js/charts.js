@@ -1,8 +1,11 @@
 /* =====================================================================
  * Grafik SVG ringan (tanpa pustaka) — batang horizontal, donat, garis
  * ===================================================================== */
-var PALETTE = ['#005AAB', '#3E6DB5', '#0F9D8A', '#E8A317', '#95B5DF', '#003F7A', '#7A8BA3', '#C2410C'];
+var PALETTE = [tp(), '#3E6DB5', '#0F9D8A', '#E8A317', '#95B5DF', tpd(), '#7A8BA3', '#C2410C'];
 
+function cssv(n, d) { try { return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || d; } catch (e) { return d; } }
+function tp() { return cssv('--primary', '#005AAB'); }
+function tpd() { return cssv('--primary-dark', '#003F7A'); }
 var Charts = {
   /** rows: [{label, value, color?, note?}]  opt: {ref:1, refLabel, fmt} */
   barH: function (rows, opt) {
@@ -16,7 +19,7 @@ var Charts = {
       var y = top + i * rowH;
       s += '<text x="' + (L - 10) + '" y="' + (y + 20) + '" text-anchor="end" font-size="12.5" font-weight="500" fill="' + (r.color === '#DC2626' ? '#DC2626' : '#1A2433') + '">' + esc(trunc(r.label, 15)) + '</text>';
       s += '<rect x="' + L + '" y="' + (y + 6) + '" width="' + (W - L - R) + '" height="20" rx="3" fill="#F1F5F9"/>';
-      s += '<rect x="' + L + '" y="' + (y + 6) + '" width="' + Math.max(2, sx(r.value) - L) + '" height="20" rx="3" fill="' + (r.color || '#005AAB') + '"><title>' + esc(r.label) + ': ' + esc((opt.fmt || fmtNum)(r.value)) + '</title></rect>';
+      s += '<rect x="' + L + '" y="' + (y + 6) + '" width="' + Math.max(2, sx(r.value) - L) + '" height="20" rx="3" fill="' + (r.color || tp()) + '"><title>' + esc(r.label) + ': ' + esc((opt.fmt || fmtNum)(r.value)) + '</title></rect>';
       s += '<text x="' + (W - 4) + '" y="' + (y + 20) + '" text-anchor="end" font-size="12.5" font-weight="700" fill="' + (r.color === '#DC2626' ? '#DC2626' : '#1A2433') + '" style="font-feature-settings:\'tnum\'">' + esc((opt.fmt || fmtNum)(r.value)) + (r.note ? ' ' + esc(r.note) : '') + '</text>';
     });
     if (opt.ref) {
@@ -65,7 +68,7 @@ var Charts = {
     var maxY = Math.max(opt.target || 0, Math.max.apply(null, pts.map(function (p) { return p.y; }))) * 1.2 || 1;
     var sx = function (i) { return pts.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (pts.length - 1); };
     var sy = function (v) { return T + (H - T - B) * (1 - v / maxY); };
-    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img"><defs><linearGradient id="lgA" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#005AAB" stop-opacity=".18"/><stop offset="1" stop-color="#005AAB" stop-opacity="0"/></linearGradient></defs>';
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img"><defs><linearGradient id="lgA" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="' + tp() + '" stop-opacity=".18"/><stop offset="1" stop-color="' + tp() + '" stop-opacity="0"/></linearGradient></defs>';
     for (var g = 0; g <= 4; g++) {
       var yv = maxY * g / 4, yy = sy(yv);
       s += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="#EEF2F7"/>';
@@ -78,11 +81,11 @@ var Charts = {
     }
     var d = pts.map(function (p, i) { return (i ? 'L' : 'M') + sx(i).toFixed(1) + ' ' + sy(p.y).toFixed(1); }).join('');
     if (pts.length > 1) s += '<path d="' + d + 'L' + sx(pts.length - 1) + ' ' + (H - B) + 'L' + sx(0) + ' ' + (H - B) + 'Z" fill="url(#lgA)"/>';
-    s += '<path d="' + d + '" fill="none" stroke="#005AAB" stroke-width="2.5" stroke-linejoin="round"/>';
+    s += '<path d="' + d + '" fill="none" stroke="' + tp() + '" stroke-width="2.5" stroke-linejoin="round"/>';
     pts.forEach(function (p, i) {
       var last = i === pts.length - 1;
-      s += '<circle cx="' + sx(i) + '" cy="' + sy(p.y) + '" r="' + (last ? 6 : 4.5) + '" fill="' + (last ? '#005AAB' : '#fff') + '" stroke="#005AAB" stroke-width="2.5"/>';
-      s += '<text x="' + sx(i) + '" y="' + (sy(p.y) - 12) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#003F7A">' + fmtNum(p.y, 2) + '</text>';
+      s += '<circle cx="' + sx(i) + '" cy="' + sy(p.y) + '" r="' + (last ? 6 : 4.5) + '" fill="' + (last ? tp() : '#fff') + '" stroke="' + tp() + '" stroke-width="2.5"/>';
+      s += '<text x="' + sx(i) + '" y="' + (sy(p.y) - 12) + '" text-anchor="middle" font-size="12" font-weight="700" fill="' + tpd() + '">' + fmtNum(p.y, 2) + '</text>';
       s += '<text x="' + sx(i) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="11.5" fill="' + (last ? '#1A2433' : '#5B6B7F') + '" font-weight="' + (last ? 700 : 400) + '">' + esc(p.x) + '</text>';
     });
     return '<div class="chart">' + s + '</svg></div>';

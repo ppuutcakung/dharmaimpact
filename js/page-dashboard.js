@@ -39,7 +39,7 @@ registerPage('dashboard', {
       '<select class="inp" id="dSektor" style="width:auto;min-width:200px"></select>' +
       '<span class="grow"></span><button class="btn" id="dRekap">' + ic('download') + ' Ekspor Rekap (XLSX / PDF)</button></div>' +
       '<div class="grid g-5 kpis" id="dCards"></div>' +
-      '<div class="grid g-21 mt"><div class="card"><div class="card-head"><div><h3 id="dBarT">SROI per Cabang</h3><p>Urutan rasio dampak tertinggi ke terendah (hanya yang Disetujui)</p></div><div class="row small"><span class="row" style="gap:6px"><i class="dot" style="color:#005AAB"></i>Rasio aktual</span><span class="row text-red" style="gap:6px">— Titik impas (1,00)</span></div></div><div class="card-pad" style="padding-top:4px" id="dBar"></div></div>' +
+      '<div class="grid g-21 mt"><div class="card"><div class="card-head"><div><h3 id="dBarT">SROI per Cabang</h3><p>Urutan rasio dampak tertinggi ke terendah (hanya yang Disetujui)</p></div><div class="row small"><span class="row" style="gap:6px"><i class="dot" style="color:var(--primary)"></i>Rasio aktual</span><span class="row text-red" style="gap:6px">— Titik impas (1,00)</span></div></div><div class="card-pad" style="padding-top:4px" id="dBar"></div></div>' +
       '<div class="card"><div class="card-head"><div><h3>Sebaran Manfaat Stakeholder</h3><p id="dDonutSub">Akumulasi nilai dampak (PV)</p></div>' + ic('pie-chart') + '</div><div class="card-pad" style="padding-top:4px" id="dDonut"></div></div></div>' +
       '<div class="card mt"><div class="card-head"><div><h3>Tren Rasio SROI Nasional</h3><p>Rata-rata tertimbang (Σ PV Impact ÷ Σ PV Investasi) per tahun</p></div></div><div class="card-pad" style="padding-top:0" id="dLine"></div></div>' +
       '<div class="card mt"><div class="card-head"><div><h3>Ringkasan Kinerja per Cabang</h3><p>Investasi & manfaat seluruh cabang aktif pada tahun terpilih</p></div>' +
@@ -87,7 +87,7 @@ registerPage('dashboard', {
       '<div class="card kpi"><div class="lbl">Status Persetujuan ' + ic('clipboard-check') + '</div><div class="val">' + ok.length + ' / ' + cab.length + '<span class="small muted" style="font-family:var(--f-body);font-weight:600;margin-left:8px">' + pctFmt(cab.length ? ok.length / cab.length : 0, 0) + '</span></div><div class="progress"><i style="width:' + (cab.length ? ok.length / cab.length * 100 : 0) + '%"></i></div><div class="foot"><span>' + waiting + ' cabang menunggu validasi</span>' + (waiting ? '<i class="dot" style="color:#E8A317"></i>' : '') + '</div></div>';
 
     $('#dBarT', el).textContent = 'SROI per Cabang (Tahun ' + this.f.tahun + ')';
-    var rows = ok.map(function (p) { var r = proyekRatio(p); return { label: M.cabangName(p.cabang_id), value: r, color: r < 1 ? '#DC2626' : '#005AAB', note: r < 1 ? '(Defisit)' : '' }; }).sort(function (a, b) { return b.value - a.value; });
+    var rows = ok.map(function (p) { var r = proyekRatio(p); return { label: M.cabangName(p.cabang_id), value: r, color: r < 1 ? '#DC2626' : tp(), note: r < 1 ? '(Defisit)' : '' }; }).sort(function (a, b) { return b.value - a.value; });
     $('#dBar', el).innerHTML = Charts.barH(rows, { ref: 1, refLabel: 'Titik impas (1,00)', fmt: function (v) { return fmtNum(v, 2); } });
     var segs = Agg.sebaran(ok);
     var tot = segs.reduce(function (a, s) { return a + s.value; }, 0);

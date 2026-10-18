@@ -33,7 +33,7 @@ var Perf = {
 };
 
 /* ---------------- API (timeout, retry baca, reqId tulis, tunggu online) ---------------- */
-var READ_ACTIONS = /^(bootstrap|batch|getMaster|listProyek|getRekap|getDashboard|getProyek|getLaporanProyek|listUsers|getLog|exportDatabase)$/;
+var READ_ACTIONS = /^(getTampilan|bootstrap|batch|getMaster|listProyek|getRekap|getDashboard|getProyek|getLaporanProyek|listUsers|getLog|exportDatabase)$/;
 var _inflight = 0;
 function netState() {
   var d = $('#netDot'); if (!d) return;
@@ -299,14 +299,14 @@ function route() {
 }
 function setTitle(title, crumb, extra) {
   $('#pageTitle').innerHTML = esc(title) + (extra || '');
-  $('#crumb').innerHTML = 'DharmaImpact / <b>' + esc(crumb || title) + '</b>';
-  document.title = title + ' — DharmaImpact';
+  $('#crumb').innerHTML = esc(window.UI ? UI.app_name : 'DharmaImpact') + ' / <b>' + esc(crumb || title) + '</b>';
+  document.title = title + ' — ' + (window.UI ? UI.app_name : 'DharmaImpact');
 }
 
 /* ---------------- Navigasi per peran ---------------- */
 var NAV = {
   ADMIN: [['dashboard', 'Dashboard Akumulasi', 'layout-dashboard'], ['cabang', 'Dashboard Cabang', 'building'], ['proyek', 'Perhitungan SROI', 'calculator', 'wizard'],
-    ['persetujuan', 'Persetujuan', 'clipboard-check'], ['laporan', 'Laporan & Ekspor', 'file-text'], '|Administrasi', ['master', 'Data Induk & Parameter', 'sliders'], ['users', 'Pengguna', 'users'], ['log', 'Log Audit', 'history']],
+    ['persetujuan', 'Persetujuan', 'clipboard-check'], ['laporan', 'Laporan & Ekspor', 'file-text'], '|Administrasi', ['master', 'Data Induk & Parameter', 'sliders'], ['users', 'Pengguna', 'users'], ['tampilan', 'Tampilan Aplikasi', 'palette'], ['log', 'Log Audit', 'history']],
   CABANG: [['cabang', 'Dashboard Cabang', 'layout-dashboard'], ['proyek', 'Perhitungan SROI', 'calculator', 'wizard'], ['laporan', 'Laporan & Ekspor', 'file-text']],
   STAKEHOLDER: [['dashboard', 'Dashboard Akumulasi', 'layout-dashboard'], ['cabang', 'Ringkasan Cabang', 'building', 'wizard'], ['laporan', 'Laporan & Ekspor', 'file-text']]
 };
@@ -332,4 +332,43 @@ function updateNavBadges() {
   var b = $('#navBadge'); if (!b) return;
   var n = (App.proyek || []).filter(function (p) { return p.status === 'Dikirim'; }).length;
   b.textContent = n; b.hidden = !n;
+}
+
+/* =====================================================================
+ * TEMA & IDENTITAS APLIKASI (diatur Super Admin di menu Tampilan Aplikasi)
+ * Disimpan di perangkat (tanpa login) agar halaman login pun langsung bertema.
+ * ===================================================================== */
+var THEME_DEFAULT = {
+  app_name: 'DharmaImpact', app_sub: 'SROI Management', org_name: 'Pusat Pendampingan UMKM',
+  login_title: 'Satu mesin hitung SROI untuk seluruh cabang binaan.',
+  login_desc: 'Isi data program, lihat rasio Social Return on Investment langsung saat mengetik, kirim ke pusat, dan cetak laporan siap arsip — tanpa rumus manual.',
+  footer: 'Sistem Pengukuran Dampak Sosial Program Pembinaan UMKM',
+  color_primary: '#005AAB', color_sidebar: '#0A3D73', color_accent: '#E8A317', logo: ''
+};
+var UI = Object.assign({}, THEME_DEFAULT);
+function hexRgb(h) { h = String(h || '').replace('#', ''); if (h.length !== 6) return null; return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mixHex(h, to, t) { var a = hexRgb(h), b = hexRgb(to); if (!a || !b) return h; return '#' + a.map(function (v, i) { return ('0' + Math.round(v + (b[i] - v) * t).toString(16)).slice(-2); }).join(''); }
+function applyTheme(t) {
+  UI = Object.assign({}, THEME_DEFAULT);
+  Object.keys(t || {}).forEach(function (k) { if (t[k] !== undefined && t[k] !== null && String(t[k]) !== '') UI[k] = t[k]; });
+  var P = UI.color_primary, S = UI.color_sidebar, A = UI.color_accent, r = document.documentElement.style;
+  r.setProperty('--primary', P); r.setProperty('--primary-hover', mixHex(P, '#000000', 0.18)); r.setProperty('--primary-dark', mixHex(P, '#000000', 0.3));
+  r.setProperty('--primary-soft', mixHex(P, '#ffffff', 0.42)); r.setProperty('--primary-tint', mixHex(P, '#ffffff', 0.92)); r.setProperty('--primary-line', mixHex(P, '#ffffff', 0.75));
+  r.setProperty('--primary-deep', S); r.setProperty('--cta', mixHex(P, '#ffffff', 0.1)); r.setProperty('--amber', A);
+  if (window.PALETTE) { PALETTE[0] = P; PALETTE[5] = mixHex(P, '#000000', 0.3); PALETTE[3] = A; }
+  var meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', S);
+  document.querySelectorAll('.brand').forEach(function (b) {
+    var mark = b.querySelector('.brand-mark'), nm = b.querySelector('b'), sb = b.querySelector('small');
+    if (mark) { mark.classList.toggle('has-img', !!UI.logo); mark.innerHTML = UI.logo ? '<img src="' + UI.logo + '" alt="Logo">' : ic('logo'); }
+    if (nm) nm.textContent = UI.app_name; if (sb) sb.textContent = UI.app_sub;
+  });
+  var lt = document.getElementById('loginTitle'), ld = document.getElementById('loginDesc'), ft = document.getElementById('footTxt'), fa = document.getElementById('footApp'), bl = document.getElementById('bootName');
+  if (lt) lt.textContent = UI.login_title; if (ld) ld.textContent = UI.login_desc; if (ft) ft.textContent = UI.footer; if (fa) fa.textContent = UI.app_name; if (bl) bl.textContent = UI.app_name;
+  var fav = document.querySelector('link[rel="icon"]'); if (fav && UI.logo) fav.setAttribute('href', UI.logo);
+  CFG.APP_NAME = UI.app_name; CFG.ORG_NAME = UI.org_name;
+}
+function loadThemeCached() { var t = Store.get('ui', null); applyTheme(t || {}); }
+async function refreshTheme() {
+  var res = await api('getTampilan', {});
+  if (res.success) { var h = hashStr(JSON.stringify(res.data)); if (h !== hashStr(JSON.stringify(Store.get('ui', {})))) { Store.set('ui', res.data); applyTheme(res.data); } }
 }

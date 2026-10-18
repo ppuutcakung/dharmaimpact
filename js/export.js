@@ -36,10 +36,10 @@ var Exporter = {
     return this.run(btn, async function () {
       var d = await Exporter.detail(id, data), p = d.proyek, ctx = ctxForProyek(p), r = SroiEngine.compute(d, ctx);
       var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4' }), W = 210, cab = M.cabang(p.cabang_id);
-      var blue = [0, 90, 171], dark = [26, 36, 51], muted = [91, 107, 127];
+      var blue = hexRgb(UI.color_primary) || [0, 90, 171], dark = [26, 36, 51], muted = [91, 107, 127];
       var final = p.status === 'Disetujui';
       // kop
-      doc.setFillColor(10, 61, 115); doc.rect(0, 0, W, 30, 'F');
+      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 30, 'F');
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
       doc.text('LAPORAN PERHITUNGAN SOCIAL RETURN ON INVESTMENT', 14, 13);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
@@ -178,7 +178,7 @@ var Exporter = {
     return this.run(btn, async function () {
       var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }), W = 297;
       var rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; }), w = Agg.weighted(ok);
-      doc.setFillColor(10, 61, 115); doc.rect(0, 0, W, 24, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 24, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
       doc.text('REKAP SROI SEMUA CABANG — TAHUN ' + th, 14, 12); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
       doc.text('Rata-rata tertimbang ' + fmtNum(w.ratio, 2) + ' : 1  •  ' + ok.length + ' dari ' + rows.length + ' cabang disetujui  •  Dicetak ' + new Date().toLocaleDateString('id-ID'), 14, 19);
       // grafik batang
@@ -194,7 +194,7 @@ var Exporter = {
       if (bars.length) { var x1 = cx + 40 + (cw - 70) / maxR; doc.setDrawColor(220, 38, 38); doc.setLineDashPattern([1, 1], 0); doc.line(x1, cy - 1, x1, cy + bars.length * (bh + 1.6)); doc.setLineDashPattern([], 0); }
       var ty = cy + bars.length * (bh + 1.6) + 6;
       doc.autoTable({
-        startY: Math.max(ty, 50), theme: 'grid', margin: { left: 14, right: 14 }, styles: { fontSize: 8.5, cellPadding: 1.8 }, headStyles: { fillColor: [0, 90, 171] },
+        startY: Math.max(ty, 50), theme: 'grid', margin: { left: 14, right: 14 }, styles: { fontSize: 8.5, cellPadding: 1.8 }, headStyles: { fillColor: hexRgb(UI.color_primary) || [0, 90, 171] },
         head: [['No', 'Cabang', 'Total Investasi', 'PV Investasi', 'Total Impact', 'PV Impact', 'Rasio', 'Bintang', 'Status', 'UMKM']],
         body: rows.map(function (r, i) { var p = r.p || {}; var has = N(p.hasil_pv_investasi) > 0; return [i + 1, r.cabang, has ? rpPlain(p.hasil_total_investasi) : '-', has ? rpPlain(p.hasil_pv_investasi) : '-', has ? rpPlain(p.hasil_total_impact) : '-', has ? rpPlain(p.hasil_pv_impact) : '-', has ? fmtNum(N(p.hasil_rasio), 2) : '-', has ? String(p.hasil_bintang) : '-', p.status || 'Belum Mulai', N(p.hasil_umkm) || '-']; }),
         foot: [['', 'TOTAL DISETUJUI', rpPlain(w.totalInvestasi), rpPlain(w.pvInvestasi), rpPlain(w.totalImpact), rpPlain(w.pvImpact), fmtNum(w.ratio, 2), String(Agg.bintangOf(w.ratio)), ok.length + ' cabang', fmtNum(w.umkm)]],

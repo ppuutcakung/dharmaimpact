@@ -79,7 +79,9 @@ function idlePrefetch() {
 
 document.addEventListener('DOMContentLoaded', function () {
   hydrateIcons();
+  loadThemeCached();          // tema & logo tampil seketika dari perangkat
   warmUpServer();
+  refreshTheme();             // perbarui tema dari server di latar
   $('#loginForm').addEventListener('submit', doLogin);
   $('#btnLogout').addEventListener('click', doLogout);
   $('#btnBurger').addEventListener('click', function () { document.body.classList.toggle('nav-open'); });

@@ -314,16 +314,151 @@ registerPage('profil', {
   }
 });
 
+/* ===================== TAMPILAN APLIKASI ===================== */
+var THEME_PRESETS = [
+  ['Biru Korporat', '#005AAB', '#0A3D73', '#E8A317'], ['Hijau Hutan', '#15803D', '#14532D', '#EAB308'],
+  ['Merah Marun', '#B91C1C', '#5F1A1A', '#F59E0B'], ['Ungu Royal', '#6D28D9', '#3B0764', '#F59E0B'],
+  ['Toska', '#0F766E', '#134E4A', '#F59E0B'], ['Kuning Astra', '#C28A00', '#1F2937', '#0EA5E9'], ['Abu Grafit', '#334155', '#0F172A', '#E8A317']
+];
+registerPage('tampilan', {
+  roles: ['ADMIN'],
+  init: function (el) {
+    var self = this;
+    el.addEventListener('input', function (e) {
+      var f = e.target.dataset.t; if (!f) return;
+      self.draft[f] = e.target.value;
+      if (e.target.type === 'color') { var tx = el.querySelector('[data-tx="' + f + '"]'); if (tx) tx.value = e.target.value; }
+      self.preview(el);
+    });
+    el.addEventListener('change', function (e) {
+      if (e.target.dataset.tx) { var f = e.target.dataset.tx, v = e.target.value.trim(); if (/^#[0-9a-fA-F]{6}$/.test(v)) { self.draft[f] = v; el.querySelector('[data-t="' + f + '"]').value = v; self.preview(el); } else toast('Format warna harus #RRGGBB, mis. #005AAB', 'warn'); }
+      if (e.target.id === 'logoFile') self.readLogo(el, e.target);
+    });
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-x]'); if (!b) return;
+      var x = b.dataset.x;
+      if (x === 'preset') { var pr = THEME_PRESETS[+b.dataset.i]; self.draft.color_primary = pr[1]; self.draft.color_sidebar = pr[2]; self.draft.color_accent = pr[3]; self.render(el); self.preview(el); }
+      if (x === 'logo-del') { self.draft.logo = ''; self.render(el); self.preview(el); toast('Logo dihapus dari pratinjau. Klik Simpan untuk menerapkan.', 'ok'); }
+      if (x === 'reset') { self.draft = Object.assign({}, THEME_DEFAULT); self.render(el); self.preview(el); toast('Dikembalikan ke bawaan (belum disimpan).', 'ok'); }
+      if (x === 'cancel') { self.draft = Object.assign({}, UI); applyTheme(Store.get('ui', {})); self.render(el); }
+      if (x === 'save') self.save(el, b);
+    });
+  },
+  show: function (el) { setTitle('Tampilan Aplikasi', 'Administrasi'); this.draft = Object.assign({}, UI); this.render(el); },
+  hide: function () { applyTheme(Store.get('ui', {})); },   // batalkan pratinjau yang belum disimpan
+  preview: function (el) {
+    applyTheme(this.draft);
+    var pv = el.querySelector('#tmPrev'); if (pv) pv.innerHTML = this.prevHtml();
+  },
+  prevHtml: function () {
+    var d = this.draft;
+    return '<div style="display:flex;border:1px solid var(--border);border-radius:12px;overflow:hidden;min-height:190px">' +
+      '<div style="width:42%;background:' + esc(d.color_sidebar) + ';color:#fff;padding:14px"><div class="row" style="flex-wrap:nowrap;gap:8px"><div class="brand-mark' + (d.logo ? ' has-img' : '') + '" style="width:34px;height:34px">' + (d.logo ? '<img src="' + d.logo + '" alt="">' : ic('logo')) + '</div><div style="min-width:0"><b style="font-family:var(--f-head);display:block;font-size:14px;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(d.app_name || '') + '</b><small style="opacity:.85;font-size:11px">' + esc(d.app_sub || '') + '</small></div></div>' +
+      '<div style="margin-top:14px;background:' + esc(mixHex(d.color_primary, '#ffffff', 0.1)) + ';border-radius:8px;padding:7px;text-align:center;font-size:12px;font-weight:600">+ Hitung Baru</div><div style="margin-top:10px;background:rgba(255,255,255,.13);border-radius:8px;padding:7px 9px;font-size:12px">Dashboard</div></div>' +
+      '<div style="flex:1;padding:14px;background:#F5F7FA"><div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px"><div style="font-size:11px;color:var(--muted);font-weight:600">RASIO SROI</div><div style="font-family:var(--f-head);font-size:24px;font-weight:800;color:' + esc(d.color_primary) + '">2,47 : 1</div><div style="color:' + esc(d.color_accent) + ';font-size:16px">★★★<span style="color:#D7DEE8">★★</span></div></div>' +
+      '<div style="margin-top:10px;display:inline-block;background:' + esc(d.color_primary) + ';color:#fff;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600">Tombol utama</div></div></div>';
+  },
+  field: function (k, label, max, area, hint) {
+    var v = this.draft[k] || '';
+    return '<div class="field' + (area ? ' span3' : '') + '"><label>' + label + '</label>' + (area ? '<textarea class="inp" rows="3" maxlength="' + max + '" data-t="' + k + '">' + esc(v) + '</textarea>' : '<input class="inp" maxlength="' + max + '" data-t="' + k + '" value="' + esc(v) + '">') + (hint ? '<span class="hint">' + hint + '</span>' : '') + '</div>';
+  },
+  color: function (k, label, hint) {
+    var v = this.draft[k];
+    return '<div class="field"><label>' + label + '</label><div class="row" style="flex-wrap:nowrap;gap:8px"><input type="color" data-t="' + k + '" value="' + esc(v) + '" style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;padding:3px;background:#fff;cursor:pointer"><input class="inp" data-tx="' + k + '" value="' + esc(v) + '" maxlength="7" style="font-family:monospace"></div><span class="hint">' + hint + '</span></div>';
+  },
+  render: function (el) {
+    var d = this.draft;
+    el.innerHTML = '<div class="banner banner-blue">' + ic('info') + '<div><b>Perubahan langsung terlihat sebagai pratinjau</b><p>Klik <b>Simpan Tampilan</b> agar berlaku untuk semua pengguna. Meninggalkan halaman tanpa menyimpan akan membatalkan pratinjau.</p></div></div>' +
+      '<div class="grid g-21"><div>' +
+      '<div class="card"><div class="card-head"><div><h3>' + ic('image') + ' Logo Aplikasi</h3><p>PNG/JPG/SVG maks. 2 MB — otomatis diperkecil. Kosongkan untuk memakai ikon bawaan.</p></div></div><div class="card-pad" style="padding-top:0"><div class="row" style="gap:16px">' +
+      '<div class="brand-mark' + (d.logo ? ' has-img' : '') + '" style="width:72px;height:72px;border:1px solid var(--border);color:var(--primary)">' + (d.logo ? '<img src="' + d.logo + '" alt="Logo">' : ic('logo')) + '</div>' +
+      '<div class="row"><label class="btn btn-primary btn-sm">' + ic('upload') + ' Unggah logo<input type="file" id="logoFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>' + (d.logo ? '<button class="btn btn-sm btn-danger" data-x="logo-del">' + ic('trash') + ' Hapus logo</button>' : '') + '</div></div></div></div>' +
+      '<div class="card mt"><div class="card-head"><div><h3>Identitas & Teks</h3><p>Nama aplikasi tampil di logo sidebar, halaman login, judul tab browser, dan kop laporan.</p></div></div><div class="card-pad" style="padding-top:0"><div class="form-grid" style="grid-template-columns:1fr 1fr">' +
+      this.field('app_name', 'Nama aplikasi (tulisan logo)', 40) + this.field('app_sub', 'Sub judul di bawah nama', 60) +
+      this.field('org_name', 'Nama organisasi (kop laporan PDF)', 120, false) + this.field('footer', 'Teks footer', 200) +
+      this.field('login_title', 'Judul halaman login', 140, true) + this.field('login_desc', 'Deskripsi halaman login', 400, true) + '</div></div></div>' +
+      '<div class="card mt"><div class="card-head"><div><h3>' + ic('palette') + ' Warna</h3><p>Pilih tema siap pakai atau atur warna sendiri.</p></div></div><div class="card-pad" style="padding-top:0">' +
+      '<div class="chips mb">' + THEME_PRESETS.map(function (p, i) { return '<span class="chip" data-x="preset" data-i="' + i + '"><i style="width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,' + p[2] + ' 50%,' + p[1] + ' 50%);display:inline-block"></i>' + p[0] + '</span>'; }).join('') + '</div>' +
+      '<div class="form-grid">' + this.color('color_primary', 'Warna utama', 'Tombol, angka rasio, tautan, grafik') + this.color('color_sidebar', 'Warna sidebar', 'Menu samping & tema browser HP') + this.color('color_accent', 'Warna aksen', 'Bintang kategori & penanda') + '</div></div></div>' +
+      '</div><div><div class="card" style="position:sticky;top:calc(var(--top) + 16px)"><div class="card-head"><div><h3>Pratinjau</h3><p>Gambaran warna & logo</p></div></div><div class="card-pad" style="padding-top:0"><div id="tmPrev">' + this.prevHtml() + '</div>' +
+      '<div class="row mt" style="justify-content:flex-end"><button class="btn btn-sm" data-x="reset">' + ic('refresh') + ' Bawaan</button><button class="btn btn-sm" data-x="cancel">Batal</button><button class="btn btn-primary" data-x="save">' + ic('save') + ' Simpan Tampilan</button></div></div></div></div></div>';
+  },
+  readLogo: function (el, input) {
+    var f = input.files[0], self = this; input.value = '';
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) return toast('Ukuran logo maksimal 2 MB.', 'err');
+    var rd = new FileReader();
+    rd.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 160, w = img.naturalWidth || 160, h = img.naturalHeight || 160, sc = Math.min(1, max / Math.max(w, h));
+        var cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(w * sc)); cv.height = Math.max(1, Math.round(h * sc));
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        var url = cv.toDataURL('image/png');
+        if (url.length > 44000) url = cv.toDataURL('image/webp', 0.85);
+        if (url.length > 44000) return toast('Logo terlalu rumit untuk disimpan. Gunakan gambar yang lebih sederhana.', 'err');
+        self.draft.logo = url; self.render(el); self.preview(el); toast('Logo dimuat ke pratinjau. Klik Simpan untuk menerapkan.', 'ok');
+      };
+      img.onerror = function () { toast('Berkas gambar tidak bisa dibaca.', 'err'); };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  },
+  save: function (el, btn) {
+    var d = this.draft, self = this;
+    if (!String(d.app_name || '').trim()) return toast('Nama aplikasi wajib diisi.', 'warn');
+    var payload = {}; Object.keys(THEME_DEFAULT).forEach(function (k) { payload[k] = d[k] === THEME_DEFAULT[k] ? '' : (d[k] || ''); });
+    return withBtn(btn, async function () {
+      var res = await api('saveTampilan', { tampilan: payload });
+      if (!res.success) return toast(res.message, 'err');
+      Store.set('ui', res.data); applyTheme(res.data); self.draft = Object.assign({}, UI); self.render(el);
+      toast('Tampilan disimpan dan berlaku untuk semua pengguna.', 'ok');
+    });
+  }
+});
+
 /* ===================== LOG AUDIT ===================== */
+var LOG_LABEL = {
+  UBAH_DATA: 'Ubah data SROI', BUAT_PROYEK: 'Buat perhitungan', SALIN_PROYEK: 'Salin perhitungan', HAPUS_PROYEK: 'Hapus perhitungan',
+  KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci',
+  UNGGAH_BERKAS: 'Unggah berkas', HAPUS_BERKAS: 'Hapus berkas', GANTI_PASSWORD: 'Ganti password', RESET_PASSWORD: 'Reset password',
+  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', HAPUS_KPI: 'Hapus KPI',
+  UBAH_PARAMETER: 'Ubah parameter', UBAH_UMK_BUDGET: 'Ubah UMK & budget', UBAH_TAMPILAN: 'Ubah tampilan', BERSIHKAN_LOG: 'Bersihkan log',
+  TAMBAH_CABANG: 'Tambah cabang', UBAH_CABANG: 'Ubah cabang', HAPUS_CABANG: 'Hapus cabang', TAMBAH_SEKTOR: 'Tambah sektor', UBAH_SEKTOR: 'Ubah sektor', HAPUS_SEKTOR: 'Hapus sektor',
+  TAMBAH_PROGRAM: 'Tambah program', UBAH_PROGRAM: 'Ubah program', HAPUS_PROGRAM: 'Hapus program', HAPUS_CABANG_TAHUN: 'Hapus UMK & budget'
+};
+var LOG_GROUP = { sroi: /PROYEK|DATA|KIRIM|SETUJUI|KEMBALIKAN|KUNCI|BERKAS/, akun: /PASSWORD|AKUN/, induk: /KPI|PARAMETER|UMK|CABANG|SEKTOR|PROGRAM|TAMPILAN|LOG/ };
+var LOG_HIDE = ['LOGIN', 'LOGOUT', 'LOGIN_LOCKED', 'SLOW'];
 registerPage('log', {
   roles: ['ADMIN'],
-  init: function (el) { el.innerHTML = '<div class="card"><div class="card-head"><div><h3>Log Audit</h3><p>300 aktivitas terakhir: kirim, setujui, kembalikan, buka kunci, ubah parameter, akun, login.</p></div><button class="btn btn-sm" id="lgRef">' + ic('refresh') + ' Muat ulang</button></div><div class="tbl-wrap" style="max-height:70vh"><table class="tbl compact" id="lgTbl"><tbody><tr><td><div class="skel" style="height:200px"></div></td></tr></tbody></table></div></div>'; var self = this; $('#lgRef', el).onclick = function () { self.load(el, true); }; },
+  init: function (el) {
+    var self = this; this.f = { g: '', q: '' };
+    el.innerHTML = '<div class="card"><div class="card-head"><div><h3>Log Audit</h3><p>Hanya mencatat perubahan data penting oleh admin maupun cabang: ubah/hapus data SROI, kirim & persetujuan, berkas, password, akun, dan data induk. Login/logout tidak dicatat. Log disimpan maks. 3.000 catatan terbaru.</p></div>' +
+      '<div class="row"><div class="search"><span data-icon="search"></span><input class="inp" id="lgQ" placeholder="Cari pengguna/detail…" style="width:200px"></div><select class="inp" id="lgG" style="width:auto"><option value="">Semua jenis</option><option value="sroi">Data SROI</option><option value="akun">Akun & password</option><option value="induk">Data induk & tampilan</option></select>' +
+      '<button class="btn btn-sm" id="lgRef">' + ic('refresh') + ' Muat ulang</button><button class="btn btn-sm btn-danger" id="lgClean" title="Hapus catatan login/logout dari versi lama">' + ic('trash') + ' Bersihkan log lama</button></div></div>' +
+      '<div class="tbl-wrap" style="max-height:70vh"><table class="tbl compact" id="lgTbl"><tbody><tr><td><div class="skel" style="height:200px"></div></td></tr></tbody></table></div></div>';
+    hydrateIcons(el);
+    $('#lgRef', el).onclick = function () { self.load(el, true); };
+    $('#lgG', el).onchange = function () { self.f.g = this.value; self.draw(el); };
+    $('#lgQ', el).oninput = debounce(function () { self.f.q = this.value.toLowerCase(); self.draw(el); }, 200);
+    $('#lgClean', el).onclick = async function () {
+      if (!(await confirmBox('Bersihkan log lama?', 'Catatan login, logout, dan catatan teknis dari versi sebelumnya akan dihapus untuk menghemat penyimpanan. Catatan perubahan data tetap aman.', 'Bersihkan', 'btn-danger'))) return;
+      var b = this; withBtn(b, async function () { var r = await api('cleanLog', {}); if (!r.success) return toast(r.message, 'err'); toast(r.message || 'Log dibersihkan.', 'ok'); self.load(el, true); });
+    };
+  },
   show: function (el) { setTitle('Log Audit', 'Administrasi'); this.load(el, false); },
-  load: function (el, force) {
-    var userName = function (id) { var u = (App.users || []).filter(function (x) { return x.user_id === id || x.username === id; })[0]; return u ? u.nama_tampilan : id; };
-    var pName = function (id) { var p = (App.proyek || []).filter(function (x) { return x.proyek_id === id; })[0]; return p ? M.cabangName(p.cabang_id) + ' ' + p.tahun : (id || ''); };
-    swr('log', 'getLog', {}, function (rows) {
-      $('#lgTbl', el).innerHTML = '<thead><tr><th>Waktu</th><th>Pengguna</th><th>Aksi</th><th>Perhitungan</th><th>Detail</th></tr></thead><tbody>' + (rows.length ? rows.map(function (r) { return '<tr><td class="small nowrap">' + fmtDate(r.waktu) + '</td><td>' + esc(userName(r.user_id)) + '</td><td><span class="badge ' + (/SETUJUI/.test(r.aksi) ? 'st-Disetujui' : /KEMBALI|KUNCI|LOCK/.test(r.aksi) ? 'st-Revisi' : /KIRIM/.test(r.aksi) ? 'st-Dikirim' : 'st-Draft') + '">' + esc(r.aksi) + '</span></td><td>' + esc(pName(r.proyek_id)) + '</td><td class="small">' + esc(r.detail) + '</td></tr>'; }).join('') : '<tr><td colspan="5"><div class="empty">Belum ada log.</div></td></tr>') + '</tbody>';
-    }, { force: force, fresh: 30000 });
+  load: function (el, force) { var self = this; swr('log', 'getLog', {}, function (rows) { self.rows = rows; self.draw(el); }, { force: force, fresh: 30000 }); },
+  draw: function (el) {
+    var f = this.f;
+    var userName = function (id) { var u = (App.users || []).filter(function (x) { return x.user_id === id || x.username === id; })[0]; return u ? u.nama_tampilan + (u.role === 'CABANG' ? ' (' + M.cabangName(u.cabang_id) + ')' : u.role === 'ADMIN' ? ' (Admin)' : '') : id; };
+    var pName = function (id) { var p = (App.proyek || []).filter(function (x) { return x.proyek_id === id; })[0]; return p ? M.cabangName(p.cabang_id) + ' ' + p.tahun : (id ? '(sudah dihapus)' : ''); };
+    var rows = (this.rows || []).filter(function (r) {
+      if (LOG_HIDE.indexOf(r.aksi) > -1) return false;
+      if (f.g && !LOG_GROUP[f.g].test(r.aksi)) return false;
+      if (f.q && (userName(r.user_id) + ' ' + r.detail + ' ' + (LOG_LABEL[r.aksi] || r.aksi) + ' ' + pName(r.proyek_id)).toLowerCase().indexOf(f.q) < 0) return false;
+      return true;
+    });
+    var cls = function (a) { return /SETUJUI/.test(a) ? 'st-Disetujui' : /HAPUS|KEMBALI|KUNCI|RESET/.test(a) ? 'st-Revisi' : /KIRIM|PASSWORD/.test(a) ? 'st-Dikirim' : 'st-Draft'; };
+    $('#lgTbl', el).innerHTML = '<thead><tr><th>Waktu</th><th>Pengguna</th><th>Aksi</th><th>Perhitungan</th><th>Detail</th></tr></thead><tbody>' + (rows.length ? rows.map(function (r) { return '<tr><td class="small nowrap">' + fmtDate(r.waktu) + '</td><td>' + esc(userName(r.user_id)) + '</td><td><span class="badge ' + cls(r.aksi) + '">' + esc(LOG_LABEL[r.aksi] || r.aksi) + '</span></td><td>' + esc(pName(r.proyek_id)) + '</td><td class="small">' + esc(r.detail) + '</td></tr>'; }).join('') : '<tr><td colspan="5"><div class="empty">Belum ada catatan.</div></td></tr>') + '</tbody>';
   }
 });

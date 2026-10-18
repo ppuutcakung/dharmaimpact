@@ -16,15 +16,15 @@
 </head>
 <body>
   <!-- Layar awal (hanya tampil < 1 detik bila sesi tersimpan) -->
-  <div id="boot"><div class="boot-logo"><div class="spinner"></div> DharmaImpact</div></div>
+  <div id="boot"><div class="boot-logo"><div class="spinner"></div> <span id="bootName">DharmaImpact</span></div></div>
 
   <!-- ================= LOGIN ================= -->
   <section id="login" hidden>
     <div class="login-art">
-      <div class="brand"><div class="brand-mark" data-icon="logo"></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
+      <div class="brand"><div class="brand-mark"><span data-icon="logo"></span></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
       <div>
-        <h1>Satu mesin hitung SROI untuk seluruh cabang binaan.</h1>
-        <p>Isi data program, lihat rasio Social Return on Investment langsung saat mengetik, kirim ke pusat, dan cetak laporan siap arsip — tanpa rumus manual.</p>
+        <h1 id="loginTitle">Satu mesin hitung SROI untuk seluruh cabang binaan.</h1>
+        <p id="loginDesc">Isi data program, lihat rasio Social Return on Investment langsung saat mengetik, kirim ke pusat, dan cetak laporan siap arsip — tanpa rumus manual.</p>
       </div>
       <div class="stat-row">
         <div><b>8</b><span>Langkah terpandu</span></div>
@@ -49,7 +49,7 @@
   <!-- ================= APLIKASI ================= -->
   <div id="shell" hidden>
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><div class="brand-mark" data-icon="logo"></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
+      <div class="brand"><div class="brand-mark"><span data-icon="logo"></span></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
       <div class="cta" id="ctaWrap"><button class="btn btn-cta" id="btnHitungBaru"><span data-icon="plus-circle"></span> Hitung Baru</button></div>
       <nav class="nav" id="nav"></nav>
       <div class="side-foot">
@@ -72,7 +72,7 @@
         </div>
       </header>
       <main id="pages"></main>
-      <footer class="app-foot"><span><b>DharmaImpact</b> • Sistem Pengukuran Dampak Sosial Program Pembinaan UMKM</span><span>Mesin hitung SroiEngine v<span id="engVer"></span> • Rumus klasik R1–R8</span></footer>
+      <footer class="app-foot"><span><b id="footApp">DharmaImpact</b> • <span id="footTxt">Sistem Pengukuran Dampak Sosial Program Pembinaan UMKM</span></span><span>Mesin hitung SroiEngine v<span id="engVer"></span> • Rumus klasik R1–R8</span></footer>
     </div>
     <nav class="bottomnav" id="bottomnav"></nav>
   </div>
