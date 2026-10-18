@@ -7,7 +7,7 @@ var LIB = {
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  xstd: 'js/xlsx-std.js?v=3'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
+  xstd: 'js/xlsx-std.js?v=5'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
 };
 async function loadXStd() { await loadScript(LIB.jszip); await loadScript(LIB.xstd); return window.XLap; }
 /** Konteks hitung: proyek Disetujui memakai snapshot parameter saat persetujuan (B4) */
@@ -19,6 +19,32 @@ function ctxForProyek(p) {
 }
 async function loadPdf() { await loadScript(LIB.jspdf); await loadScript(LIB.autotable); return window.jspdf.jsPDF; }
 async function loadXlsx() { await loadScript(LIB.xlsx); return window.XLSX; }
+/** Info gambar (data URL) untuk jsPDF: ukuran asli & format. */
+function imgInfo(url) {
+  return new Promise(function (res) {
+    var im = new Image();
+    im.onload = function () {
+      var fmt = /^data:image\/jpe?g/.test(url) ? 'JPEG' : 'PNG', u = url;
+      if (!/^data:image\/(png|jpe?g)/.test(url)) { var c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); u = c.toDataURL('image/png'); fmt = 'PNG'; }
+      res({ url: u, fmt: fmt, w: im.naturalWidth || 1, h: im.naturalHeight || 1 });
+    };
+    im.onerror = function () { res(null); }; im.src = url;
+  });
+}
+/** Ubah gambar (data URL) menjadi PNG (Uint8Array) + ukuran, untuk Excel. */
+function pngOf(url, max) {
+  return new Promise(function (res) {
+    var im = new Image();
+    im.onload = function () {
+      var sc = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(im.naturalWidth * sc)); c.height = Math.max(1, Math.round(im.naturalHeight * sc));
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      var b = atob(c.toDataURL('image/png').split(',')[1]), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+      res({ png: u, w: c.width, h: c.height });
+    };
+    im.onerror = function () { res(null); }; im.src = url;
+  });
+}
 var PK_NAMA = { KPI_BUDGET: 'KPI×Budget', BENCHMARK: 'Benchmark', NET_PROFIT: 'Net Profit', MANFAAT_SH: 'Manfaat SH', MANUAL: 'Manual' };
 function pkText(h) { return (h.komponen || []).map(function (c) { return PK_NAMA[c.jenis] || c.jenis || '-'; }).join(' + ') || '-'; }
 function pkF(h, f) { return (h.komponen || []).map(function (c) { return fmtNum(c[f], 1) + '%'; }).join(' / ') || '-'; }
@@ -223,19 +249,34 @@ var Exporter = {
     if (A.stakeholder.length) t += '\n\nPenerima manfaat terbesar adalah ' + A.stakeholder[0].nama + ' dengan porsi ' + pctFmt(A.stakeholder[0].porsi, 1) + ' dari total manfaat' + (A.stakeholder[1] ? ', diikuti ' + A.stakeholder[1].nama + ' (' + pctFmt(A.stakeholder[1].porsi, 1) + ')' : '') + '. Program menjangkau ' + fmtNum(w.umkm) + ' UMKM binaan.';
     return t;
   },
-  mgmtPdf: function (th, lap, btn) {
+  mgmtPdf: function (th, lap, btn, logo) {
     return this.run(btn, async function () {
+      var lgImg = logo ? await imgInfo(logo) : null;
       var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4' }), W = 210, A = Exporter.mgmtAgg(th), w = A.w, L = lap || {}, P = L.program || {};
       var blue = hexRgb(UI.color_primary) || [0, 90, 171], dark = [26, 36, 51], muted = [91, 107, 127], final = A.ok.length === A.rows.length && A.rows.length > 0;
-      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 32, 'F');
-      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5);
-      var jl = doc.splitTextToSize((P.judul || ('Laporan Konsolidasi SROI Tahun ' + th)).toUpperCase(), W - 28); doc.text(jl.slice(0, 2), 14, 12);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
-      doc.text((P.penyelenggara || CFG.ORG_NAME || 'DharmaImpact') + '  |  Tahun ' + th + '  |  Doc. No: ' + (P.doc_number || '-') + '  |  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), 14, 27);
-      var y = 40;
+      // KOP: logo perusahaan (kiri) + judul yang dibatasi lebarnya — otomatis turun baris bila panjang
+      var LG = 24, tx = lgImg ? 14 + LG + 6 : 14, tw = Math.min(W - 14 - tx, 132);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5);
+      var jl = doc.splitTextToSize((P.judul || ('Laporan Konsolidasi SROI Tahun ' + th)).toUpperCase(), tw).slice(0, 3);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8);
+      var sub = doc.splitTextToSize((P.penyelenggara || CFG.ORG_NAME || 'DharmaImpact') + '  |  Tahun ' + th + '  |  Doc. No: ' + (P.doc_number || '-') + '  |  Rev. ' + (P.rev || '0') + '  |  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), W - 14 - tx).slice(0, 2);
+      var block = 3.6 + (jl.length - 1) * 6.2 + 7 + (sub.length - 1) * 4.4 + 1;   // tinggi isi kop (mm)
+      var kopH = Math.max(lgImg ? LG + 12 : 26, block + 16);
+      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, kopH, 'F');
+      if (lgImg) {
+        var ly = (kopH - LG) / 2;
+        doc.setFillColor(255, 255, 255); doc.roundedRect(14, ly, LG, LG, 2.5, 2.5, 'F');
+        var sc = Math.min((LG - 3) / lgImg.w, (LG - 3) / lgImg.h), iw = lgImg.w * sc, ih = lgImg.h * sc;
+        try { doc.addImage(lgImg.url, lgImg.fmt, 14 + (LG - iw) / 2, ly + (LG - ih) / 2, iw, ih); } catch (e) { console.warn('logo', e); }
+      }
+      var ty = (kopH - block) / 2 + 3.6;   // judul & sub-judul di tengah kop secara vertikal
+      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5); doc.text(jl, tx, ty, { lineHeightFactor: 1.3 });
+      ty += (jl.length - 1) * 6.2 + 7;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(226, 232, 240); doc.text(sub, tx, ty, { lineHeightFactor: 1.4 });
+      var y = kopH + 8;
       if (!final) {
-        doc.setFillColor(254, 226, 226); doc.rect(0, 32, W, 9, 'F'); doc.setFillColor(220, 38, 38); doc.rect(0, 32, 3, 9, 'F');
-        doc.setTextColor(185, 28, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('LAPORAN SEMENTARA — ' + A.ok.length + ' dari ' + A.rows.length + ' cabang disetujui', 14, 37.8); y = 49;
+        doc.setFillColor(254, 226, 226); doc.rect(0, kopH, W, 9, 'F'); doc.setFillColor(220, 38, 38); doc.rect(0, kopH, 3, 9, 'F');
+        doc.setTextColor(185, 28, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('LAPORAN SEMENTARA — ' + A.ok.length + ' dari ' + A.rows.length + ' cabang disetujui', 14, kopH + 5.8); y = kopH + 17;
       }
       var sec = function (t) { if (y > 262) { doc.addPage(); y = 20; } doc.setTextColor.apply(doc, blue); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text(t, 14, y); y += 2; };
       var tblOpt = { theme: 'grid', styles: { fontSize: 8.8, cellPadding: 1.8, textColor: dark, lineColor: [226, 232, 240] }, headStyles: { fillColor: blue, textColor: 255, fontStyle: 'bold' }, margin: { left: 14, right: 14 } };
@@ -270,18 +311,25 @@ var Exporter = {
         doc.setTextColor.apply(doc, dark); doc.setFont('helvetica', 'bold'); doc.text(b.nama || '(.................................)', x + 4, y + 28);
         doc.setFont('helvetica', 'normal'); doc.setTextColor.apply(doc, muted); doc.text(doc.splitTextToSize(b.jabatan || '', bw - 8)[0] || '', x + 4, y + 33);
       });
+      var rv = (L.revisi || []).filter(function (x) { return x && (x.rev || x.ket); });
+      if (rv.length) {
+        y += pg.length ? 46 : 14; if (y > 250) { doc.addPage(); y = 20; }
+        sec('F. RIWAYAT REVISI');
+        doc.autoTable(Object.assign({}, tblOpt, { startY: y, head: [['Rev.', 'Tanggal', 'Keterangan perubahan', 'Oleh']], body: rv.map(function (x) { return [String(x.rev), x.tgl || '', x.ket || '-', x.oleh || '']; }), columnStyles: { 0: { cellWidth: 14, halign: 'center' }, 1: { cellWidth: 28 }, 3: { cellWidth: 40 } } }));
+      }
       // LAMPIRAN
       doc.addPage('a4', 'landscape');
       Exporter.rekapDraw(doc, th, 'LAMPIRAN — REKAP SROI SELURUH CABANG TAHUN ' + th);
       var n = doc.getNumberOfPages();
       for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); var pw = doc.internal.pageSize.getWidth(), ph = doc.internal.pageSize.getHeight(); doc.text('DharmaImpact • Laporan Konsolidasi SROI ' + th, 14, ph - 4); doc.text('Hal. ' + i + ' / ' + n, pw - 14, ph - 4, { align: 'right' }); }
-      doc.save('Laporan_Manajemen_SROI_' + th + '.pdf'); toast('Laporan manajemen (PDF) diunduh.', 'ok');
+      doc.save('Laporan_Manajemen_SROI_' + th + '_Rev' + (P.rev || '0') + '.pdf'); toast('Laporan manajemen (PDF) diunduh.', 'ok');
     });
   },
-  mgmtXlsx: function (th, lap, btn) {
+  mgmtXlsx: function (th, lap, btn, logo) {
     return this.run(btn, async function () {
+      var lgPng = logo ? await pngOf(logo, 160) : null;
       var L = await loadXStd(), rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; });
-      await L.mgmt({ th: th, rows: rows, ok: ok, w: Agg.weighted(ok), M: M, Agg: Agg, target: function (cid) { return M.targetCabang(th, cid); }, targetNas: M.targetNasional(th), org: CFG.ORG_NAME || 'DharmaImpact', rpShort: rpShort, lap: lap, agg: Exporter.mgmtAgg(th) });
+      await L.mgmt({ th: th, rows: rows, ok: ok, w: Agg.weighted(ok), M: M, Agg: Agg, target: function (cid) { return M.targetCabang(th, cid); }, targetNas: M.targetNasional(th), org: CFG.ORG_NAME || 'DharmaImpact', rpShort: rpShort, lap: lap, agg: Exporter.mgmtAgg(th), logo: lgPng });
       toast('Laporan manajemen (Excel) diunduh.', 'ok');
     });
   },

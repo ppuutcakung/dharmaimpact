@@ -44,18 +44,47 @@ var LapM = {
     if (!el._lm) {
       el._lm = true; var self = this;
       el.addEventListener('input', function (e) { var k = e.target.dataset.lm; if (!k) return; self.setVal(k, e.target.value); if (e.target.tagName === 'TEXTAREA') autoGrowTa(e.target); });
-      el.addEventListener('change', function (e) { if (e.target.id === 'lmTh') { if (self.dirty && !confirm('Perubahan tahun ' + self.th + ' belum disimpan. Pindah tahun?')) { e.target.value = self.th; return; } self.th = +e.target.value; self.load(); } });
+      el.addEventListener('change', function (e) { if (e.target.id === 'lmLogoFile') return self.readLogo(e.target); if (e.target.id === 'lmTh') { if (self.dirty && !confirm('Perubahan tahun ' + self.th + ' belum disimpan. Pindah tahun?')) { e.target.value = self.th; return; } self.th = +e.target.value; self.load(); } });
       el.addEventListener('click', function (e) { var b = e.target.closest('[data-lmx]'); if (b) self.act(b.dataset.lmx, b); });
     }
     this.load();
   },
   key: function () { return userKey('lm:' + this.th); },
+  renderLogo: function () {
+    var b = $('#lmLogo', this.el); if (!b) return;
+    b.innerHTML = this.logo ? '<img src="' + this.logo + '" alt="Logo perusahaan">' : '<span>' + ic('image') + '<small>Belum ada logo</small></span>';
+    var d = $('#lmLogoDel', this.el); if (d) d.disabled = !this.logo;
+  },
+  readLogo: function (input) {
+    var f = input.files[0], self = this; input.value = ''; if (!f) return;
+    if (f.size > 2 * 1024 * 1024) return toast('Ukuran logo maksimal 2 MB.', 'err');
+    var rd = new FileReader();
+    rd.onload = function () {
+      var img = new Image();
+      img.onload = async function () {
+        var url = '', sizes = [320, 240, 180, 140];
+        for (var i = 0; i < sizes.length && (!url || url.length > 46000); i++) {
+          var sc = Math.min(1, sizes[i] / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(img.naturalWidth * sc)); cv.height = Math.max(1, Math.round(img.naturalHeight * sc));
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); url = cv.toDataURL('image/png');
+          if (url.length > 46000) { var c2 = document.createElement('canvas'); c2.width = cv.width; c2.height = cv.height; var x = c2.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c2.width, c2.height); x.drawImage(cv, 0, 0); url = c2.toDataURL('image/jpeg', 0.88); }
+        }
+        if (url.length > 46000) return toast('Logo terlalu rumit untuk disimpan. Gunakan gambar yang lebih sederhana.', 'err');
+        var r = await api('saveLogoLaporan', { logo: url });
+        if (!r.success) return toast(r.message, 'err');
+        self.logo = url; self.renderLogo(); toast('Logo perusahaan tersimpan.', 'ok');
+      };
+      img.onerror = function () { toast('Berkas gambar tidak bisa dibaca.', 'err'); };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(f);
+  },
   load: function () {
     var self = this, th = this.th, draft = Store.get(this.key(), null);
     this.data = draft ? draft.data : null; this.dirty = !!draft; this.render();
     api('getLaporanMgmt', { tahun: th }).then(function (r) {
       if (!r.success || self.th !== th) return;
-      self.meta = r.data;
+      self.meta = r.data; self.logo = r.data.logo || ''; self.renderLogo();
       if (!self.dirty) { self.data = r.data.data && Object.keys(r.data.data).length ? r.data.data : null; self.render(); }
       else self.renderInfo();
     });
@@ -63,10 +92,10 @@ var LapM = {
   defaults: function () {
     var A = Exporter.mgmtAgg(this.th), cab = A.ok.map(function (p) { return M.cabangName(p.cabang_id); });
     return { program: { judul: 'Laporan Konsolidasi SROI Program Pembinaan UMKM Tahun ' + this.th, nama_program: 'Program Pembinaan UMKM', penyelenggara: CFG.ORG_NAME || '', periode: 'Januari – Desember ' + this.th,
-      lokasi: A.rows.length + ' cabang: ' + A.rows.map(function (r) { return r.cabang; }).join(', '), penanggung_jawab: '', mitra_penilai: '', metode: 'Evaluasi SROI (Social Return on Investment)', tujuan: '', ruang_lingkup: '', doc_number: '', tgl: new Date().toLocaleDateString('id-ID') },
-      penjelasan: '', pengesahan: [] };
+      lokasi: A.rows.length + ' cabang: ' + A.rows.map(function (r) { return r.cabang; }).join(', '), penanggung_jawab: '', mitra_penilai: '', metode: 'Evaluasi SROI (Social Return on Investment)', tujuan: '', ruang_lingkup: '', doc_number: '', rev: '0', tgl: new Date().toLocaleDateString('id-ID') },
+      penjelasan: '', pengesahan: [], revisi: [] };
   },
-  D: function () { if (!this.data) this.data = this.defaults(); this.data.program = this.data.program || {}; this.data.pengesahan = this.data.pengesahan || []; return this.data; },
+  D: function () { if (!this.data) this.data = this.defaults(); this.data.program = this.data.program || {}; this.data.pengesahan = this.data.pengesahan || []; this.data.revisi = this.data.revisi || []; if (this.data.program.rev == null || this.data.program.rev === '') this.data.program.rev = '0'; return this.data; },
   setVal: function (k, v) {
     var d = this.D(), p = k.split('.');
     if (p[0] === 'program') d.program[p[1]] = v; else if (p[0] === 'pg') d.pengesahan[+p[1]][p[2]] = v; else d[p[0]] = v;
@@ -88,7 +117,8 @@ var LapM = {
       '<div class="row"><select class="inp" id="lmTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="card-pad" style="padding-top:0">' +
       (A.ok.length < A.rows.length ? '<div class="banner banner-amber">' + ic('alert') + '<div><b>' + A.ok.length + ' dari ' + A.rows.length + ' cabang sudah disetujui</b><p>Cabang yang belum disetujui tidak ikut dihitung. Laporan tetap bisa diunduh dengan tanda "sementara".</p></div></div>' : '<div class="banner banner-green">' + ic('check-circle') + '<div><b>Seluruh ' + A.rows.length + ' cabang sudah disetujui</b><p>Laporan siap disusun dan disahkan.</p></div></div>') +
-      '<div class="lm-sec"><h4>A. Data Program</h4><div class="form-grid">' + F('judul', 'Judul laporan', '', true) + F('nama_program', 'Nama program') + F('penyelenggara', 'Penyelenggara') + F('periode', 'Periode program') + F('lokasi', 'Lokasi / cakupan', '', true) + F('penanggung_jawab', 'Penanggung jawab program') + F('mitra_penilai', 'Mitra penilai') + F('metode', 'Metode penilaian') + F('doc_number', 'Nomor dokumen') + F('tgl', 'Tanggal laporan') +
+      '<div class="lm-sec"><h4>Logo Perusahaan</h4><div class="lm-logo"><div class="lm-logo-box" id="lmLogo"></div><div><div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn btn-sm btn-primary" data-lmx="logo-up">' + ic('upload') + ' Unggah logo</button><button class="btn btn-sm" data-lmx="logo-del" id="lmLogoDel">' + ic('trash') + ' Hapus</button></div><p class="small muted" style="margin:6px 0 0">Tampil di kiri judul pada kop PDF & Excel laporan manajemen (berlaku untuk semua tahun). PNG/JPG, maks. 2 MB — otomatis diperkecil.</p><input type="file" id="lmLogoFile" accept="image/png,image/jpeg,image/webp" hidden></div></div></div>' +
+      '<div class="lm-sec"><h4>A. Data Program</h4><div class="form-grid">' + F('judul', 'Judul laporan', '', true) + F('nama_program', 'Nama program') + F('penyelenggara', 'Penyelenggara') + F('periode', 'Periode program') + F('lokasi', 'Lokasi / cakupan', '', true) + F('penanggung_jawab', 'Penanggung jawab program') + F('mitra_penilai', 'Mitra penilai') + F('metode', 'Metode penilaian') + F('doc_number', 'Nomor dokumen') + '<div class="field"><label>Revisi ke-</label><div class="row" style="gap:6px;flex-wrap:nowrap"><input class="inp" style="width:90px;text-align:center;font-weight:700" inputmode="numeric" data-lm="program.rev" value="' + esc(P.rev || '0') + '"><button class="btn btn-sm" data-lmx="rev-new" title="Naikkan nomor revisi & catat perubahannya">' + ic('plus') + ' Revisi baru</button></div></div>' + F('tgl', 'Tanggal laporan') +
       T('tujuan', 'Tujuan program', 'Tujuan utama program pembinaan UMKM…') + T('ruang_lingkup', 'Ruang lingkup', 'Cakupan cabang, sektor, dan kegiatan yang dinilai…') + '</div></div>' +
       '<div class="lm-sec"><h4>B. Ringkasan Hasil <span class="badge badge-info">otomatis</span></h4><div class="lm-tiles">' +
       [['Rasio SROI konsolidasi', A.ok.length ? ratioFmt(w.ratio) : '—'], ['Target nasional', tn ? ratioFmt(tn) + (A.ok.length ? ' • ' + pctFmt(w.ratio / tn, 0) : '') : 'belum ditetapkan'], ['Total investasi (PV)', rp(w.pvInvestasi)], ['Total manfaat (PV)', rp(w.pvImpact)], ['UMKM binaan', fmtNum(w.umkm)], ['Cabang disetujui', A.ok.length + ' / ' + A.rows.length]].map(function (t) { return '<div><small>' + t[0] + '</small><b>' + t[1] + '</b></div>'; }).join('') + '</div></div>' +
@@ -105,8 +135,12 @@ var LapM = {
         pg.map(function (x, i) { return '<tr><td class="muted">' + (i + 1) + '</td><td><input class="inp" list="lmTahap" data-lm="pg.' + i + '.tahap" value="' + esc(x.tahap || '') + '"></td><td><input class="inp" data-lm="pg.' + i + '.nama" value="' + esc(x.nama || '') + '" placeholder="Nama lengkap"></td><td><input class="inp" data-lm="pg.' + i + '.jabatan" value="' + esc(x.jabatan || '') + '" placeholder="Jabatan"></td>' +
           '<td class="c nowrap"><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-up-' + i + '"' + (i ? '' : ' disabled') + ' title="Naik">▲</button><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-down-' + i + '"' + (i < pg.length - 1 ? '' : ' disabled') + ' title="Turun">▼</button><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-del-' + i + '" title="Hapus" style="color:var(--red-solid)">' + ic('trash') + '</button></td></tr>'; }).join('') + '</tbody></table></div>'
         : '<div class="empty" style="padding:16px">Belum ada susunan pengesahan. Klik <b>Susunan standar</b> atau <b>Tambah pengesahan</b>.</div>') + '</div>' +
+      '<div class="lm-sec"><h4>F. Riwayat Revisi <span class="badge ' + (N(P.rev) ? 'st-Dikirim' : 'badge-info') + '">Rev. ' + esc(P.rev || '0') + '</span></h4><p class="small muted" style="margin-top:-4px">Klik <b>Revisi baru</b> setiap kali laporan diperbaiki atas masukan penilai lanjutan / manajemen. Nomor revisi tampil di kop PDF & Excel.</p>' +
+      (d.revisi.length ? '<div class="tbl-wrap"><table class="tbl compact"><thead><tr><th style="width:70px">Rev.</th><th style="width:150px">Tanggal</th><th>Keterangan perubahan</th><th style="width:160px">Oleh</th><th class="c" style="width:60px">Aksi</th></tr></thead><tbody>' +
+        d.revisi.map(function (r, i) { return '<tr><td class="b">' + esc(r.rev) + '</td><td>' + esc(r.tgl || '') + '</td><td>' + esc(r.ket || '-').replace(/\n/g, '<br>') + '</td><td>' + esc(r.oleh || '') + '</td><td class="c"><button class="btn btn-icon btn-sm btn-ghost" data-lmx="rev-del-' + i + '" title="Hapus catatan revisi" style="color:var(--red-solid)">' + ic('trash') + '</button></td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<div class="empty" style="padding:14px">Belum ada revisi — laporan masih <b>Rev. 0</b> (versi awal).</div>') + '</div>' +
       '</div><div class="card-foot"><span id="lmInfo"></span><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-lmx="save">' + ic('save') + ' Simpan</button><button class="btn btn-primary" data-lmx="pdf">' + ic('download') + ' Unduh PDF + Lampiran</button><button class="btn" data-lmx="xlsx">' + ic('download') + ' Unduh Excel + Lampiran</button></div></div>';
-    hydrateIcons(el); $$('textarea', el).forEach(autoGrowTa); this.renderInfo();
+    hydrateIcons(el); $$('textarea', el).forEach(autoGrowTa); this.renderInfo(); this.renderLogo();
   },
   act: async function (k, btn) {
     var self = this, d = this.D(), pg = d.pengesahan, m;
@@ -125,13 +159,29 @@ var LapM = {
       if (m[1] === 'del') pg.splice(i, 1); else { var j = m[1] === 'up' ? i - 1 : i + 1, t = pg[i]; pg[i] = pg[j]; pg[j] = t; }
       this.markDirty(); return this.render();
     }
+    if (k === 'rev-new') {
+      var cur = parseInt(d.program.rev, 10) || 0, ket = await promptBox('Revisi baru — Rev. ' + (cur + 1), 'Keterangan perubahan (mis. "Perbaikan penjelasan hasil sesuai masukan manajemen")', 'Buat Rev. ' + (cur + 1), 'btn-primary', true);
+      if (!ket) return;
+      d.program.rev = String(cur + 1);
+      d.revisi.push({ rev: cur + 1, tgl: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }), ket: ket, oleh: App.me.nama || App.me.nama_tampilan || '' });
+      this.markDirty(); this.render(); return toast('Rev. ' + (cur + 1) + ' dibuat — klik Simpan untuk menyimpan.', 'ok');
+    }
+    if ((m = /^rev-del-(\d+)$/.exec(k))) {
+      if (!(await confirmBox('Hapus catatan revisi?', 'Catatan revisi ini dihapus dari riwayat. Nomor revisi di kolom "Revisi ke-" tidak berubah — sesuaikan manual bila perlu.', 'Hapus', 'btn-danger'))) return;
+      d.revisi.splice(+m[1], 1); this.markDirty(); return this.render();
+    }
     if (k === 'save') return withBtn(btn, async function () {
       var r = await api('saveLaporanMgmt', { tahun: self.th, data: self.D() });
       if (!r.success) return toast(r.message, 'err');
       self.meta = r.data; self.dirty = false; Store.del ? Store.del(self.key()) : Store.set(self.key(), null); self.renderInfo(); toast('Laporan manajemen ' + self.th + ' tersimpan.', 'ok');
     });
-    if (k === 'pdf') return Exporter.mgmtPdf(this.th, this.D(), btn);
-    if (k === 'xlsx') return Exporter.mgmtXlsx(this.th, this.D(), btn);
+    if (k === 'pdf') return Exporter.mgmtPdf(this.th, this.D(), btn, this.logo);
+    if (k === 'xlsx') return Exporter.mgmtXlsx(this.th, this.D(), btn, this.logo);
+    if (k === 'logo-up') { var fi = $('#lmLogoFile', this.el); if (fi) fi.click(); return; }
+    if (k === 'logo-del') {
+      if (!(await confirmBox('Hapus logo perusahaan?', 'Kop laporan manajemen akan tampil tanpa logo.', 'Hapus', 'btn-danger'))) return;
+      return withBtn(btn, async function () { var r = await api('saveLogoLaporan', { logo: '' }); if (!r.success) return toast(r.message, 'err'); self.logo = ''; self.renderLogo(); toast('Logo dihapus.', 'ok'); });
+    }
   }
 };
 function autoGrowTa(ta) { if (!ta) return; if (!ta._minH) ta._minH = ta.offsetHeight || 0; ta.style.height = 'auto'; ta.style.height = Math.max(ta._minH, ta.scrollHeight + 2) + 'px'; }
@@ -602,7 +652,7 @@ var LOG_LABEL = {
   UBAH_DATA: 'Ubah data SROI', BUAT_PROYEK: 'Buat perhitungan', SALIN_PROYEK: 'Salin perhitungan', HAPUS_PROYEK: 'Hapus perhitungan',
   KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci & kembalikan revisi',
   UNGGAH_BERKAS: 'Unggah berkas', HAPUS_BERKAS: 'Hapus berkas', GANTI_PASSWORD: 'Ganti password', RESET_PASSWORD: 'Reset password',
-  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', UBAH_LAPORAN_MGMT: 'Ubah laporan manajemen', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
+  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', UBAH_LAPORAN_MGMT: 'Ubah laporan manajemen', UBAH_LOGO_LAPORAN: 'Ubah logo laporan', HAPUS_LOGO_LAPORAN: 'Hapus logo laporan', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
   UBAH_PARAMETER: 'Ubah parameter', UBAH_UMK_BUDGET: 'Ubah UMK & budget', UBAH_TAMPILAN: 'Ubah tampilan', BERSIHKAN_LOG: 'Bersihkan log',
   TAMBAH_CABANG: 'Tambah cabang', UBAH_CABANG: 'Ubah cabang', HAPUS_CABANG: 'Hapus cabang', TAMBAH_SEKTOR: 'Tambah sektor', UBAH_SEKTOR: 'Ubah sektor', HAPUS_SEKTOR: 'Hapus sektor',
   TAMBAH_PROGRAM: 'Tambah program', UBAH_PROGRAM: 'Ubah program', HAPUS_PROGRAM: 'Hapus program', HAPUS_CABANG_TAHUN: 'Hapus UMK & budget'

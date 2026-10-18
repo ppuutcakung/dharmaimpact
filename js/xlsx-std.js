@@ -594,9 +594,19 @@
       var wb = new X.Workbook({ title: P.judul || ('Laporan Konsolidasi SROI ' + th), subject: 'Laporan SROI untuk manajemen', company: env.org });
       var sh = wb.sheet('Laporan Manajemen'); sh.tab = T.dark; sh.cols([6, 26, 16, 16, 16, 16, 16, 14]);
       var nC = 8, final = done === all && all > 0;
-      sh.height(0, 34).height(1, 18).height(2, 20);
-      sh.merge(0, 0, 0, nC - 1, (P.judul || ('LAPORAN KONSOLIDASI SROI TAHUN ' + th)).toUpperCase(), st.title);
-      sh.merge(1, 0, 1, nC - 1, (P.penyelenggara || env.org || 'DharmaImpact') + '  •  Tahun ' + th + '  •  Doc. No: ' + (P.doc_number || '-') + '  •  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), st.sub);
+      var judul = (P.judul || ('LAPORAN KONSOLIDASI SROI TAHUN ' + th)).toUpperCase(), lg = env.logo;
+      var tStyle = Object.assign({}, st.title, { wrap: true, font: { b: true, sz: 15, color: 'FFFFFF' } });
+      if (lg) {   // logo di kiri judul; judul dibatasi lebarnya agar turun baris dengan rapi
+        var lines = Math.max(1, Math.ceil(judul.length / 52));
+        sh.height(0, Math.max(52, 22 * lines + 10));
+        sh.set(0, 0, null, st.band);
+        sh.merge(0, 1, 0, nC - 2, judul, tStyle); sh.set(0, nC - 1, null, st.band);
+        var box = 44, sc2 = Math.min(box / lg.w, box / lg.h);
+        sh.image(lg.png, 0, 0, Math.round(lg.w * sc2), Math.round(lg.h * sc2), 2, 4);
+        sh.cols([8], 0);
+      } else { sh.height(0, Math.max(34, 22 * Math.ceil(judul.length / 62) + 10)); sh.merge(0, 0, 0, nC - 1, judul, tStyle); }
+      sh.height(1, 18).height(2, 20);
+      sh.merge(1, 0, 1, nC - 1, (P.penyelenggara || env.org || 'DharmaImpact') + '  •  Tahun ' + th + '  •  Doc. No: ' + (P.doc_number || '-') + '  •  Rev. ' + (P.rev || '0') + '  •  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), st.sub);
       sh.merge(2, 0, 2, nC - 1, final ? '✔ Seluruh ' + all + ' cabang sudah disetujui' : '⚠ ' + done + ' dari ' + all + ' cabang sudah disetujui — laporan bersifat sementara', final ? st.final : st.draft);
       var y = 4;
       y = X.section(sh, st, y, nC, 'A. DATA PROGRAM');
@@ -638,10 +648,17 @@
         });
         sh.height(y, 18).height(y + 1, 46).height(y + 2, 18).height(y + 3, 18); y += 5;
       }
+      var rv = (L.revisi || []).filter(function (x) { return x && (x.rev || x.ket); });
+      if (rv.length) {
+        y++; y = X.section(sh, st, y, nC, 'F. RIWAYAT REVISI');
+        sh.height(y, 24); sh.row(y, 0, ['Rev.', 'Tanggal'], st.th); sh.merge(y, 2, y, 5, 'Keterangan perubahan', st.th); sh.merge(y, 6, y, 7, 'Oleh', st.th); y++;
+        rv.forEach(function (x, i) { var z = i % 2 ? 'z' : ''; sh.set(y, 0, String(x.rev), st['tdc' + z]); sh.set(y, 1, x.tgl || '', st['td' + z]); sh.merge(y, 2, y, 5, x.ket || '-', st['td' + z]); sh.merge(y, 6, y, 7, x.oleh || '', st['td' + z]); fitH(sh, y, [[x.ket || '-', 64]]); y++; });
+        y++;
+      }
       sh.merge(y, 0, y, nC - 1, 'Lampiran: Rekap SROI seluruh cabang (sheet "Lampiran Rekap Cabang").', st.muted);
       sh.footer = '&L&8DharmaImpact • Laporan Konsolidasi SROI ' + th + '&R&8Hal. &P / &N';
       Lap.rekapSheet(wb, env, 'Lampiran Rekap Cabang', 'LAMPIRAN — REKAP SROI SELURUH CABANG TAHUN ' + th);
-      await wb.save('Laporan_Manajemen_SROI_' + th + '.xlsx');
+      await wb.save('Laporan_Manajemen_SROI_' + th + '_Rev' + (P.rev || '0') + '.xlsx');
     }
   };
   function fmtID(n) { return Math.round(N(n)).toLocaleString('id-ID'); }

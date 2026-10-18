@@ -532,3 +532,10 @@ i.tmark { display: inline-block; width: 4px; height: 12px; border-radius: 1px; b
 .lm-peran small { color: var(--muted); }
 .lm-card textarea.inp { overflow-y: hidden; }
 .text-amber { color: #B45309; }
+/* logo perusahaan laporan manajemen */
+.lm-logo { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.lm-logo-box { width: 84px; height: 84px; border: 1px dashed var(--border); border-radius: 10px; background: #F8FAFC; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; }
+.lm-logo-box img { max-width: 76px; max-height: 76px; object-fit: contain; }
+.lm-logo-box span { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 10.5px; }
+.lm-logo-box svg { width: 22px; height: 22px; }
+.lm-logo > div:last-child { flex: 1 1 260px; }
