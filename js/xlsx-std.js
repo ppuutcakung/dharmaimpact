@@ -539,12 +539,17 @@
 
     /** Rekap seluruh cabang (admin). env: {th, rows, ok, w, M, Agg, target(cid), targetNas, org, rpShort, ratioOf} */
     rekap: async function (env) {
+      var wb = new X.Workbook({ title: 'Rekap SROI ' + env.th, subject: 'Rekap SROI seluruh cabang', company: env.org });
+      Lap.rekapSheet(wb, env, 'Rekap ' + env.th);
+      await wb.save('Rekap_SROI_' + env.th + '.xlsx');
+    },
+    /** Sheet rekap seluruh cabang — dipakai sebagai file tersendiri maupun lampiran laporan manajemen. */
+    rekapSheet: function (wb, env, name, judul) {
       var T = X.theme(), st = X.S(T), th = env.th;
-      var wb = new X.Workbook({ title: 'Rekap SROI ' + th, subject: 'Rekap SROI seluruh cabang', company: env.org });
-      var sh = wb.sheet('Rekap ' + th); sh.tab = T.dark; sh.landscape = true; sh.cols([5, 9, 22, 17, 17, 17, 17, 11, 11, 11, 12, 14, 10]);
+      var sh = wb.sheet(name); sh.tab = T.dark; sh.landscape = true; sh.cols([5, 9, 22, 17, 17, 17, 17, 11, 11, 11, 12, 14, 10]);
       var nC = 13, done = env.ok.length, all = env.rows.length;
       sh.height(0, 30).height(1, 18).height(2, 20);
-      sh.merge(0, 0, 0, nC - 1, 'REKAP SOCIAL RETURN ON INVESTMENT (SROI) SELURUH CABANG — TAHUN ' + th, st.title);
+      sh.merge(0, 0, 0, nC - 1, judul || ('REKAP SOCIAL RETURN ON INVESTMENT (SROI) SELURUH CABANG — TAHUN ' + th), st.title);
       sh.merge(1, 0, 1, nC - 1, (env.org || 'DharmaImpact') + '  •  Dicetak ' + new Date().toLocaleString('id-ID') + '  •  Akumulasi hanya menghitung laporan berstatus Disetujui', st.sub);
       sh.merge(2, 0, 2, nC - 1, done === all ? '✔ Seluruh ' + all + ' cabang sudah disetujui' : '⚠ ' + done + ' dari ' + all + ' cabang sudah disetujui — rekap bersifat sementara', done === all ? st.final : st.draft);
       var y = 4; y = X.section(sh, st, y, nC, 'RINGKASAN NASIONAL');
@@ -579,7 +584,64 @@
         for (var k = 0; k < 16; k++) sh.height(y + k, 20); y += 16;
       } else { sh.merge(y, 0, y, nC - 1, 'Belum ada cabang yang disetujui pada tahun ini — grafik akan muncul setelah ada laporan Disetujui.', st.muted); y++; }
       sh.footer = '&L&8DharmaImpact • Rekap SROI ' + th + '&R&8Hal. &P / &N';
-      await wb.save('Rekap_SROI_' + th + '.xlsx');
+      return sh;
+    },
+
+    /** Laporan manajemen (konsolidasi) + lampiran rekap seluruh cabang.
+     *  env: rekap env + {lap: data isian admin, agg: hasil agregasi (stakeholder, peran, w, ok, rows), user} */
+    mgmt: async function (env) {
+      var T = X.theme(), st = X.S(T), th = env.th, L = env.lap || {}, P = L.program || {}, A = env.agg, w = A.w, done = A.ok.length, all = A.rows.length;
+      var wb = new X.Workbook({ title: P.judul || ('Laporan Konsolidasi SROI ' + th), subject: 'Laporan SROI untuk manajemen', company: env.org });
+      var sh = wb.sheet('Laporan Manajemen'); sh.tab = T.dark; sh.cols([6, 26, 16, 16, 16, 16, 16, 14]);
+      var nC = 8, final = done === all && all > 0;
+      sh.height(0, 34).height(1, 18).height(2, 20);
+      sh.merge(0, 0, 0, nC - 1, (P.judul || ('LAPORAN KONSOLIDASI SROI TAHUN ' + th)).toUpperCase(), st.title);
+      sh.merge(1, 0, 1, nC - 1, (P.penyelenggara || env.org || 'DharmaImpact') + '  •  Tahun ' + th + '  •  Doc. No: ' + (P.doc_number || '-') + '  •  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), st.sub);
+      sh.merge(2, 0, 2, nC - 1, final ? '✔ Seluruh ' + all + ' cabang sudah disetujui' : '⚠ ' + done + ' dari ' + all + ' cabang sudah disetujui — laporan bersifat sementara', final ? st.final : st.draft);
+      var y = 4;
+      y = X.section(sh, st, y, nC, 'A. DATA PROGRAM');
+      y = kv(sh, st, y, 0, 2, nC - 1, [['Nama Program', P.nama_program], ['Penyelenggara', P.penyelenggara || env.org], ['Periode Program', P.periode], ['Lokasi / Cakupan', P.lokasi], ['Penanggung Jawab Program', P.penanggung_jawab],
+        ['Mitra Penilai', P.mitra_penilai], ['Metode Penilaian', P.metode], ['Tujuan Program', P.tujuan], ['Ruang Lingkup', P.ruang_lingkup]]);
+      y++; y = X.section(sh, st, y, nC, 'B. RINGKASAN HASIL KONSOLIDASI');
+      sh.height(y, 18).height(y + 1, 30).height(y + 2, 28);
+      var tn = N(env.targetNas);
+      tile(sh, st, y, 0, 2, 'RASIO SROI KONSOLIDASI', done ? +w.ratio.toFixed(4) : '-', done ? 'tileVR' : 'tileV', 'Σ PV Impact ÷ Σ PV Investasi');
+      tile(sh, st, y, 2, 2, 'TARGET NASIONAL', tn || '-', tn ? 'tileVR' : 'tileV', tn && done ? 'Capaian ' + (w.ratio / tn * 100).toFixed(0) + '%' : (tn ? '' : 'Belum ditetapkan'));
+      tile(sh, st, y, 4, 2, 'TOTAL INVESTASI (PV)', Math.round(w.pvInvestasi), 'tileVRp', 'Nominal Rp' + Math.round(w.totalInvestasi).toLocaleString('id-ID'));
+      tile(sh, st, y, 6, 2, 'TOTAL MANFAAT (PV)', Math.round(w.pvImpact), 'tileVRpG', 'Nominal Rp' + Math.round(w.totalImpact).toLocaleString('id-ID'));
+      y += 4; sh.height(y, 18).height(y + 1, 30).height(y + 2, 28);
+      tile(sh, st, y, 0, 2, 'KATEGORI DAMPAK', done ? stars(env.Agg.bintangOf(w.ratio)) : '-', 'tileV', done ? 'Bintang ' + env.Agg.bintangOf(w.ratio) : '');
+      tile(sh, st, y, 2, 2, 'CABANG DISETUJUI', done + ' / ' + all, 'tileV', all ? (done / all * 100).toFixed(0) + '% cabang' : '');
+      tile(sh, st, y, 4, 2, 'UMKM BINAAN', N(w.umkm), 'tileV', 'Dari cabang yang disetujui');
+      tile(sh, st, y, 6, 2, 'STAKEHOLDER TERLIBAT', A.stakeholder.length, 'tileV', A.peran.length + ' kelompok peran');
+      y += 4; y = X.section(sh, st, y, nC, 'C. SEBARAN MANFAAT PER STAKEHOLDER (SELURUH CABANG)');
+      var r0 = y + 1;
+      y = X.table(sh, st, y, 0, ['No', 'Stakeholder', 'Peran', 'Jumlah Cabang', 'PV Manfaat', 'Porsi'], A.stakeholder.map(function (s, i) { return [i + 1, s.nama, s.peran, s.cabang, Math.round(s.v), s.porsi]; }), ['tdc', 'td', 'td', 'num', 'rp', 'pct'], { empty: '— belum ada cabang yang disetujui —' });
+      autoRows(sh, r0, y, 0, 6);
+      if (A.stakeholder.length) { sh.row(y, 0, ['', 'TOTAL', '', '', Math.round(w.pvImpact), 1], [st.tot, st.tot, st.tot, st.tot, st.totRp, st.totPct]); y++; }
+      y++;
+      y = X.table(sh, st, y, 0, ['No', 'Kelompok Peran', 'Jumlah Stakeholder', 'PV Manfaat', 'Porsi'], A.peran.map(function (s, i) { return [i + 1, s.peran, s.n, Math.round(s.v), s.porsi]; }), ['tdc', 'td', 'num', 'rp', 'pct']);
+      if (A.stakeholder.length) {
+        try { sh.image(X.Chart.donut(A.stakeholder.slice(0, 8).map(function (s) { return { label: s.nama, value: s.v }; }), { w: 520, h: 270, title: 'Sebaran Manfaat per Stakeholder', sub: 'Porsi PV manfaat seluruh cabang', centerTitle: 'PV MANFAAT', centerValue: env.rpShort(w.pvImpact) }), y + 1, 0, 520, 270, 4, 6); } catch (e) { }
+        for (var i = 0; i < 15; i++) sh.height(y + 1 + i, 20); y += 16;
+      }
+      y++; sh.breaks.push(y); y = X.section(sh, st, y, nC, 'D. PENJELASAN HASIL');
+      sh.merge(y, 0, y, nC - 1, L.penjelasan || '-', st.val); fitH(sh, y, [[L.penjelasan || '-', 120]], 40); y += 2;
+      y = X.section(sh, st, y, nC, 'E. PENGESAHAN');
+      var pg = (L.pengesahan || []).filter(function (x) { return x && (x.tahap || x.nama || x.jabatan); });
+      if (!pg.length) { sh.merge(y, 0, y, nC - 1, '— belum ada susunan pengesahan —', st.muted); y++; }
+      for (var k = 0; k < pg.length; k += 2) {
+        [pg[k], pg[k + 1]].forEach(function (b, j) {
+          if (!b) return; var c = j * 4;
+          sh.merge(y, c, y, c + 3, (b.tahap || '') + (b.tgl ? ', ' + b.tgl : ''), st.sign); sh.merge(y + 1, c, y + 1, c + 3, '', st.signName);
+          sh.merge(y + 2, c, y + 2, c + 3, b.nama || '(...................................)', st.signName); sh.merge(y + 3, c, y + 3, c + 3, b.jabatan || '', st.signOrg);
+        });
+        sh.height(y, 18).height(y + 1, 46).height(y + 2, 18).height(y + 3, 18); y += 5;
+      }
+      sh.merge(y, 0, y, nC - 1, 'Lampiran: Rekap SROI seluruh cabang (sheet "Lampiran Rekap Cabang").', st.muted);
+      sh.footer = '&L&8DharmaImpact • Laporan Konsolidasi SROI ' + th + '&R&8Hal. &P / &N';
+      Lap.rekapSheet(wb, env, 'Lampiran Rekap Cabang', 'LAMPIRAN — REKAP SROI SELURUH CABANG TAHUN ' + th);
+      await wb.save('Laporan_Manajemen_SROI_' + th + '.xlsx');
     }
   };
   function fmtID(n) { return Math.round(N(n)).toLocaleString('id-ID'); }

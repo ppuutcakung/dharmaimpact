@@ -28,9 +28,113 @@ registerPage('laporan', {
         '<div class="field mb"><label>Tahun</label><select class="inp" id="lpTahun">' + M.years().map(function (y) { return '<option>' + y + '</option>'; }).join('') + '</select></div>' +
         '<div class="row"><button class="btn btn-primary" data-x="rpdf">' + ic('download') + ' Rekap PDF</button><button class="btn" data-x="rxlsx">' + ic('download') + ' Rekap Excel</button></div></div></div>' : '') +
       '</div>' +
+      (me.role === 'ADMIN' ? '<div class="card mt lm-card" id="lmCard"></div>' : '') +
       (me.role === 'ADMIN' ? '<div class="card mt"><div class="card-head"><div><h3>' + ic('database') + ' Cadangan Database</h3><p>Unduh salinan seluruh sheet DharmaImpact_DB (tanpa hash password) sebagai satu file Excel.</p></div><button class="btn" data-x="db">' + ic('download') + ' Unduh Cadangan (.xlsx)</button></div></div>' : '');
+    if (me.role === 'ADMIN') LapM.mount($('#lmCard', el));
   }
 });
+
+/* ===================== LAPORAN MANAJEMEN (konsolidasi seluruh cabang) ===================== */
+var LapM = {
+  th: null, data: null, meta: null, dirty: false, el: null,
+  TAHAP: ['Disusun oleh', 'Diperiksa oleh', 'Diverifikasi oleh', 'Disetujui oleh', 'Mengetahui'],
+  mount: function (el) {
+    if (!el) return; this.el = el;
+    if (!this.th) { var okY = (App.proyek || []).filter(function (p) { return p.status === 'Disetujui'; }).map(function (p) { return Number(p.tahun); }); this.th = okY.length ? Math.max.apply(null, okY) : new Date().getFullYear(); }
+    if (!el._lm) {
+      el._lm = true; var self = this;
+      el.addEventListener('input', function (e) { var k = e.target.dataset.lm; if (!k) return; self.setVal(k, e.target.value); if (e.target.tagName === 'TEXTAREA') autoGrowTa(e.target); });
+      el.addEventListener('change', function (e) { if (e.target.id === 'lmTh') { if (self.dirty && !confirm('Perubahan tahun ' + self.th + ' belum disimpan. Pindah tahun?')) { e.target.value = self.th; return; } self.th = +e.target.value; self.load(); } });
+      el.addEventListener('click', function (e) { var b = e.target.closest('[data-lmx]'); if (b) self.act(b.dataset.lmx, b); });
+    }
+    this.load();
+  },
+  key: function () { return userKey('lm:' + this.th); },
+  load: function () {
+    var self = this, th = this.th, draft = Store.get(this.key(), null);
+    this.data = draft ? draft.data : null; this.dirty = !!draft; this.render();
+    api('getLaporanMgmt', { tahun: th }).then(function (r) {
+      if (!r.success || self.th !== th) return;
+      self.meta = r.data;
+      if (!self.dirty) { self.data = r.data.data && Object.keys(r.data.data).length ? r.data.data : null; self.render(); }
+      else self.renderInfo();
+    });
+  },
+  defaults: function () {
+    var A = Exporter.mgmtAgg(this.th), cab = A.ok.map(function (p) { return M.cabangName(p.cabang_id); });
+    return { program: { judul: 'Laporan Konsolidasi SROI Program Pembinaan UMKM Tahun ' + this.th, nama_program: 'Program Pembinaan UMKM', penyelenggara: CFG.ORG_NAME || '', periode: 'Januari – Desember ' + this.th,
+      lokasi: A.rows.length + ' cabang: ' + A.rows.map(function (r) { return r.cabang; }).join(', '), penanggung_jawab: '', mitra_penilai: '', metode: 'Evaluasi SROI (Social Return on Investment)', tujuan: '', ruang_lingkup: '', doc_number: '', tgl: new Date().toLocaleDateString('id-ID') },
+      penjelasan: '', pengesahan: [] };
+  },
+  D: function () { if (!this.data) this.data = this.defaults(); this.data.program = this.data.program || {}; this.data.pengesahan = this.data.pengesahan || []; return this.data; },
+  setVal: function (k, v) {
+    var d = this.D(), p = k.split('.');
+    if (p[0] === 'program') d.program[p[1]] = v; else if (p[0] === 'pg') d.pengesahan[+p[1]][p[2]] = v; else d[p[0]] = v;
+    this.markDirty();
+  },
+  markDirty: function () { this.dirty = true; try { Store.set(this.key(), { data: this.data, t: Date.now() }); } catch (e) { } this.renderInfo(); },
+  renderInfo: function () {
+    var i = $('#lmInfo', this.el); if (!i) return;
+    i.innerHTML = this.dirty ? '<span class="text-amber b">● Belum disimpan</span>' : (this.meta && this.meta.diubah_at ? '<span class="text-green">✓ Tersimpan ' + fmtDate(this.meta.diubah_at) + ' oleh ' + esc(this.meta.diubah_oleh || '') + '</span>' : '<span class="muted">Belum pernah disimpan</span>');
+  },
+  render: function () {
+    var el = this.el; if (!el) return;
+    var d = this.D(), P = d.program, A = Exporter.mgmtAgg(this.th), w = A.w, ys = M.years(), th = this.th, tn = M.targetNasional(th);
+    if (ys.indexOf(th) < 0) ys.unshift(th);
+    var F = function (k, lb, ph, span) { return '<div class="field' + (span ? ' span3' : '') + '"><label>' + lb + '</label><input class="inp" data-lm="program.' + k + '" value="' + esc(P[k] || '') + '" placeholder="' + esc(ph || '') + '"></div>'; };
+    var T = function (k, lb, ph) { return '<div class="field span3"><label>' + lb + '</label><textarea class="inp" rows="2" data-lm="program.' + k + '" placeholder="' + esc(ph || '') + '">' + esc(P[k] || '') + '</textarea></div>'; };
+    var pg = d.pengesahan;
+    el.innerHTML = '<div class="card-head"><div><h3>' + ic('briefcase') + ' Laporan Manajemen — Konsolidasi SROI</h3><p>Laporan untuk manajemen dari seluruh hasil SROI cabang yang <b>Disetujui</b>. Data program, penjelasan & pengesahan diisi admin; sebaran manfaat & angka dihitung otomatis. Rekap semua cabang ikut sebagai <b>lampiran</b>.</p></div>' +
+      '<div class="row"><select class="inp" id="lmTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="card-pad" style="padding-top:0">' +
+      (A.ok.length < A.rows.length ? '<div class="banner banner-amber">' + ic('alert') + '<div><b>' + A.ok.length + ' dari ' + A.rows.length + ' cabang sudah disetujui</b><p>Cabang yang belum disetujui tidak ikut dihitung. Laporan tetap bisa diunduh dengan tanda "sementara".</p></div></div>' : '<div class="banner banner-green">' + ic('check-circle') + '<div><b>Seluruh ' + A.rows.length + ' cabang sudah disetujui</b><p>Laporan siap disusun dan disahkan.</p></div></div>') +
+      '<div class="lm-sec"><h4>A. Data Program</h4><div class="form-grid">' + F('judul', 'Judul laporan', '', true) + F('nama_program', 'Nama program') + F('penyelenggara', 'Penyelenggara') + F('periode', 'Periode program') + F('lokasi', 'Lokasi / cakupan', '', true) + F('penanggung_jawab', 'Penanggung jawab program') + F('mitra_penilai', 'Mitra penilai') + F('metode', 'Metode penilaian') + F('doc_number', 'Nomor dokumen') + F('tgl', 'Tanggal laporan') +
+      T('tujuan', 'Tujuan program', 'Tujuan utama program pembinaan UMKM…') + T('ruang_lingkup', 'Ruang lingkup', 'Cakupan cabang, sektor, dan kegiatan yang dinilai…') + '</div></div>' +
+      '<div class="lm-sec"><h4>B. Ringkasan Hasil <span class="badge badge-info">otomatis</span></h4><div class="lm-tiles">' +
+      [['Rasio SROI konsolidasi', A.ok.length ? ratioFmt(w.ratio) : '—'], ['Target nasional', tn ? ratioFmt(tn) + (A.ok.length ? ' • ' + pctFmt(w.ratio / tn, 0) : '') : 'belum ditetapkan'], ['Total investasi (PV)', rp(w.pvInvestasi)], ['Total manfaat (PV)', rp(w.pvImpact)], ['UMKM binaan', fmtNum(w.umkm)], ['Cabang disetujui', A.ok.length + ' / ' + A.rows.length]].map(function (t) { return '<div><small>' + t[0] + '</small><b>' + t[1] + '</b></div>'; }).join('') + '</div></div>' +
+      '<div class="lm-sec"><h4>C. Sebaran Manfaat per Stakeholder <span class="badge badge-info">otomatis</span></h4><p class="small muted" style="margin-top:-4px">Gabungan stakeholder dari seluruh cabang disetujui. Semua UMKM (apa pun sektornya) digabung menjadi satu: <b>UMKM Binaan</b>.</p>' +
+      '<div class="tbl-wrap"><table class="tbl compact"><thead><tr><th>No</th><th>Stakeholder</th><th>Peran</th><th class="c">Cabang</th><th class="r">PV Manfaat</th><th class="r">Porsi</th></tr></thead><tbody>' +
+      (A.stakeholder.length ? A.stakeholder.map(function (s, i) { return '<tr><td class="muted">' + (i + 1) + '</td><td class="b">' + esc(s.nama) + '</td><td>' + esc(s.peran) + '</td><td class="c">' + s.cabang + '</td><td class="r tnum">' + rp(s.v) + '</td><td class="r tnum">' + pctFmt(s.porsi, 1) + '</td></tr>'; }).join('') : '<tr><td colspan="6"><div class="empty">Belum ada cabang yang disetujui pada tahun ini.</div></td></tr>') +
+      '</tbody>' + (A.stakeholder.length ? '<tfoot><tr><td></td><td>TOTAL</td><td></td><td></td><td class="r tnum">' + rp(A.total) + '</td><td class="r">100%</td></tr></tfoot>' : '') + '</table></div>' +
+      (A.peran.length ? '<div class="lm-peran">' + A.peran.map(function (x) { return '<span><b>' + esc(x.peran) + '</b> ' + pctFmt(x.porsi, 1) + ' <small>(' + x.n + ' stakeholder)</small></span>'; }).join('') + '</div>' : '') + '</div>' +
+      '<div class="lm-sec"><h4>D. Penjelasan Hasil</h4><div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="small muted">Uraian kuantitatif & kualitatif hasil SROI konsolidasi untuk manajemen.</span><button class="btn btn-sm" data-lmx="draft">' + ic('wand') + ' Buat draf otomatis</button></div>' +
+      '<textarea class="inp" rows="5" data-lm="penjelasan" placeholder="Tulis penjelasan atau klik Buat draf otomatis…">' + esc(d.penjelasan || '') + '</textarea></div>' +
+      '<div class="lm-sec"><h4>E. Pengesahan</h4><div class="row" style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px"><span class="small muted">Urutan dari penyusun sampai manajemen. Kotak tanda tangan otomatis tersusun di PDF & Excel.</span><div class="row" style="gap:6px"><button class="btn btn-sm" data-lmx="pg-auto">' + ic('users') + ' Susunan standar</button><button class="btn btn-sm btn-primary" data-lmx="pg-add">' + ic('plus') + ' Tambah pengesahan</button></div></div>' +
+      '<datalist id="lmTahap">' + this.TAHAP.map(function (t) { return '<option value="' + t + '">'; }).join('') + '</datalist>' +
+      (pg.length ? '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th style="width:40px">No</th><th style="min-width:160px">Tahap</th><th style="min-width:200px">Nama</th><th style="min-width:220px">Jabatan / Unit</th><th class="c">Aksi</th></tr></thead><tbody>' +
+        pg.map(function (x, i) { return '<tr><td class="muted">' + (i + 1) + '</td><td><input class="inp" list="lmTahap" data-lm="pg.' + i + '.tahap" value="' + esc(x.tahap || '') + '"></td><td><input class="inp" data-lm="pg.' + i + '.nama" value="' + esc(x.nama || '') + '" placeholder="Nama lengkap"></td><td><input class="inp" data-lm="pg.' + i + '.jabatan" value="' + esc(x.jabatan || '') + '" placeholder="Jabatan"></td>' +
+          '<td class="c nowrap"><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-up-' + i + '"' + (i ? '' : ' disabled') + ' title="Naik">▲</button><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-down-' + i + '"' + (i < pg.length - 1 ? '' : ' disabled') + ' title="Turun">▼</button><button class="btn btn-icon btn-sm btn-ghost" data-lmx="pg-del-' + i + '" title="Hapus" style="color:var(--red-solid)">' + ic('trash') + '</button></td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<div class="empty" style="padding:16px">Belum ada susunan pengesahan. Klik <b>Susunan standar</b> atau <b>Tambah pengesahan</b>.</div>') + '</div>' +
+      '</div><div class="card-foot"><span id="lmInfo"></span><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-lmx="save">' + ic('save') + ' Simpan</button><button class="btn btn-primary" data-lmx="pdf">' + ic('download') + ' Unduh PDF + Lampiran</button><button class="btn" data-lmx="xlsx">' + ic('download') + ' Unduh Excel + Lampiran</button></div></div>';
+    hydrateIcons(el); $$('textarea', el).forEach(autoGrowTa); this.renderInfo();
+  },
+  act: async function (k, btn) {
+    var self = this, d = this.D(), pg = d.pengesahan, m;
+    if (k === 'draft') {
+      if (d.penjelasan && !(await confirmBox('Ganti penjelasan?', 'Penjelasan yang sudah ditulis akan diganti dengan draf otomatis dari angka konsolidasi.', 'Ganti'))) return;
+      d.penjelasan = Exporter.mgmtDraft(this.th); this.markDirty(); return this.render();
+    }
+    if (k === 'pg-add') { pg.push({ tahap: this.TAHAP[Math.min(pg.length, this.TAHAP.length - 1)], nama: '', jabatan: '' }); this.markDirty(); return this.render(); }
+    if (k === 'pg-auto') {
+      if (pg.length && !(await confirmBox('Pakai susunan standar?', 'Daftar pengesahan saat ini akan diganti dengan susunan standar (Disusun → Diperiksa → Disetujui → Mengetahui).', 'Ganti'))) return;
+      d.pengesahan = [{ tahap: 'Disusun oleh', nama: App.me.nama || App.me.nama_tampilan || '', jabatan: 'Admin SROI' }, { tahap: 'Diperiksa oleh', nama: '', jabatan: 'Koordinator Program' }, { tahap: 'Disetujui oleh', nama: '', jabatan: 'Manajer' }, { tahap: 'Mengetahui', nama: '', jabatan: 'Pimpinan / Manajemen' }];
+      this.markDirty(); return this.render();
+    }
+    if ((m = /^pg-(up|down|del)-(\d+)$/.exec(k))) {
+      var i = +m[2];
+      if (m[1] === 'del') pg.splice(i, 1); else { var j = m[1] === 'up' ? i - 1 : i + 1, t = pg[i]; pg[i] = pg[j]; pg[j] = t; }
+      this.markDirty(); return this.render();
+    }
+    if (k === 'save') return withBtn(btn, async function () {
+      var r = await api('saveLaporanMgmt', { tahun: self.th, data: self.D() });
+      if (!r.success) return toast(r.message, 'err');
+      self.meta = r.data; self.dirty = false; Store.del ? Store.del(self.key()) : Store.set(self.key(), null); self.renderInfo(); toast('Laporan manajemen ' + self.th + ' tersimpan.', 'ok');
+    });
+    if (k === 'pdf') return Exporter.mgmtPdf(this.th, this.D(), btn);
+    if (k === 'xlsx') return Exporter.mgmtXlsx(this.th, this.D(), btn);
+  }
+};
+function autoGrowTa(ta) { if (!ta) return; if (!ta._minH) ta._minH = ta.offsetHeight || 0; ta.style.height = 'auto'; ta.style.height = Math.max(ta._minH, ta.scrollHeight + 2) + 'px'; }
 
 /* ===================== DATA INDUK & PARAMETER ===================== */
 registerPage('master', {
@@ -498,7 +602,7 @@ var LOG_LABEL = {
   UBAH_DATA: 'Ubah data SROI', BUAT_PROYEK: 'Buat perhitungan', SALIN_PROYEK: 'Salin perhitungan', HAPUS_PROYEK: 'Hapus perhitungan',
   KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci & kembalikan revisi',
   UNGGAH_BERKAS: 'Unggah berkas', HAPUS_BERKAS: 'Hapus berkas', GANTI_PASSWORD: 'Ganti password', RESET_PASSWORD: 'Reset password',
-  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
+  BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', UBAH_LAPORAN_MGMT: 'Ubah laporan manajemen', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
   UBAH_PARAMETER: 'Ubah parameter', UBAH_UMK_BUDGET: 'Ubah UMK & budget', UBAH_TAMPILAN: 'Ubah tampilan', BERSIHKAN_LOG: 'Bersihkan log',
   TAMBAH_CABANG: 'Tambah cabang', UBAH_CABANG: 'Ubah cabang', HAPUS_CABANG: 'Hapus cabang', TAMBAH_SEKTOR: 'Tambah sektor', UBAH_SEKTOR: 'Ubah sektor', HAPUS_SEKTOR: 'Hapus sektor',
   TAMBAH_PROGRAM: 'Tambah program', UBAH_PROGRAM: 'Ubah program', HAPUS_PROGRAM: 'Hapus program', HAPUS_CABANG_TAHUN: 'Hapus UMK & budget'

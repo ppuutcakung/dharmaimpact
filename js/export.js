@@ -7,7 +7,7 @@ var LIB = {
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  xstd: 'js/xlsx-std.js?v=2'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
+  xstd: 'js/xlsx-std.js?v=3'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
 };
 async function loadXStd() { await loadScript(LIB.jszip); await loadScript(LIB.xstd); return window.XLap; }
 /** Konteks hitung: proyek Disetujui memakai snapshot parameter saat persetujuan (B4) */
@@ -153,33 +153,136 @@ var Exporter = {
   },
   rekapPdf: function (th, btn) {
     return this.run(btn, async function () {
-      var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }), W = 297;
-      var rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; }), w = Agg.weighted(ok);
-      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 24, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-      doc.text('REKAP SROI SEMUA CABANG — TAHUN ' + th, 14, 12); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
-      doc.text('Rata-rata tertimbang ' + fmtNum(w.ratio, 2) + ' : 1  •  ' + ok.length + ' dari ' + rows.length + ' cabang disetujui  •  Dicetak ' + new Date().toLocaleDateString('id-ID'), 14, 19);
-      // grafik batang
-      var cx = 14, cy = 32, cw = W - 28, bars = ok.slice().sort(function (a, b) { return N(b.hasil_rasio) - N(a.hasil_rasio); }), maxR = Math.max(1.2, Math.max.apply(null, bars.map(function (p) { return N(p.hasil_rasio); }).concat([0]))) * 1.1;
-      doc.setTextColor(0, 90, 171); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text('SROI per Cabang (Disetujui)', cx, cy); cy += 4;
-      var bh = Math.min(6, 60 / Math.max(1, bars.length));
-      bars.forEach(function (p, i) {
-        var y = cy + i * (bh + 1.6), r = N(p.hasil_rasio), len = (cw - 70) * r / maxR;
-        doc.setFontSize(8); doc.setTextColor(26, 36, 51); doc.setFont('helvetica', 'normal'); doc.text(M.cabangName(p.cabang_id), cx + 38, y + bh - 1.3, { align: 'right' });
-        doc.setFillColor(r < 1 ? 220 : 0, r < 1 ? 38 : 90, r < 1 ? 38 : 171); doc.rect(cx + 40, y, Math.max(0.6, len), bh, 'F');
-        doc.setFont('helvetica', 'bold'); doc.text(fmtNum(r, 2), cx + 42 + len, y + bh - 1.3);
-      });
-      if (bars.length) { var x1 = cx + 40 + (cw - 70) / maxR; doc.setDrawColor(220, 38, 38); doc.setLineDashPattern([1, 1], 0); doc.line(x1, cy - 1, x1, cy + bars.length * (bh + 1.6)); doc.setLineDashPattern([], 0); }
-      var ty = cy + bars.length * (bh + 1.6) + 6;
+      var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      Exporter.rekapDraw(doc, th);
+      doc.save('Rekap_SROI_' + th + '.pdf'); toast('Rekap PDF diunduh.', 'ok');
+    });
+  },
+  /** Gambar rekap seluruh cabang pada halaman landscape yang sedang aktif (dipakai juga sebagai lampiran). */
+  rekapDraw: function (doc, th, judul) {
+    var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    var rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; }), w = Agg.weighted(ok);
+    doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 24, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text(judul || ('REKAP SROI SEMUA CABANG — TAHUN ' + th), 14, 12); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.text('Rata-rata tertimbang ' + fmtNum(w.ratio, 2) + ' : 1  •  ' + ok.length + ' dari ' + rows.length + ' cabang disetujui  •  Dicetak ' + new Date().toLocaleDateString('id-ID'), 14, 19);
+    var cx = 14, cy = 32, cw = W - 28, bars = ok.slice().sort(function (a, b) { return N(b.hasil_rasio) - N(a.hasil_rasio); }), maxR = Math.max(1.2, Math.max.apply(null, bars.map(function (p) { return N(p.hasil_rasio); }).concat([0]))) * 1.1;
+    doc.setTextColor(0, 90, 171); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text('SROI per Cabang (Disetujui)', cx, cy); cy += 4;
+    var bh = Math.min(6, 60 / Math.max(1, bars.length));
+    bars.forEach(function (p, i) {
+      var y = cy + i * (bh + 1.6), r = N(p.hasil_rasio), len = (cw - 70) * r / maxR;
+      doc.setFontSize(8); doc.setTextColor(26, 36, 51); doc.setFont('helvetica', 'normal'); doc.text(M.cabangName(p.cabang_id), cx + 38, y + bh - 1.3, { align: 'right' });
+      doc.setFillColor(r < 1 ? 220 : 0, r < 1 ? 38 : 90, r < 1 ? 38 : 171); doc.rect(cx + 40, y, Math.max(0.6, len), bh, 'F');
+      doc.setFont('helvetica', 'bold'); doc.text(fmtNum(r, 2), cx + 42 + len, y + bh - 1.3);
+    });
+    if (bars.length) { var x1 = cx + 40 + (cw - 70) / maxR; doc.setDrawColor(220, 38, 38); doc.setLineDashPattern([1, 1], 0); doc.line(x1, cy - 1, x1, cy + bars.length * (bh + 1.6)); doc.setLineDashPattern([], 0); }
+    var ty = cy + bars.length * (bh + 1.6) + 6;
+    var addOrig = doc.addPage;   // halaman lanjutan tabel tetap landscape walau dokumen induk portrait
+    doc.addPage = function () { return addOrig.call(doc, 'a4', 'landscape'); };
+    try {
       doc.autoTable({
         startY: Math.max(ty, 50), theme: 'grid', margin: { left: 14, right: 14 }, styles: { fontSize: 8.5, cellPadding: 1.8 }, headStyles: { fillColor: hexRgb(UI.color_primary) || [0, 90, 171] },
-        head: [['No', 'Cabang', 'Total Investasi', 'PV Investasi', 'Total Impact', 'PV Impact', 'Rasio', 'Bintang', 'Status', 'UMKM']],
-        body: rows.map(function (r, i) { var p = r.p || {}; var has = N(p.hasil_pv_investasi) > 0; return [i + 1, r.cabang, has ? rpPlain(p.hasil_total_investasi) : '-', has ? rpPlain(p.hasil_pv_investasi) : '-', has ? rpPlain(p.hasil_total_impact) : '-', has ? rpPlain(p.hasil_pv_impact) : '-', has ? fmtNum(N(p.hasil_rasio), 2) : '-', has ? String(p.hasil_bintang) : '-', p.status || 'Belum Mulai', N(p.hasil_umkm) || '-']; }),
-        foot: [['', 'TOTAL DISETUJUI', rpPlain(w.totalInvestasi), rpPlain(w.pvInvestasi), rpPlain(w.totalImpact), rpPlain(w.pvImpact), fmtNum(w.ratio, 2), String(Agg.bintangOf(w.ratio)), ok.length + ' cabang', fmtNum(w.umkm)]],
+        head: [['No', 'Cabang', 'Total Investasi', 'PV Investasi', 'Total Impact', 'PV Impact', 'Rasio', 'Target', 'Bintang', 'Status', 'UMKM']],
+        body: rows.map(function (r, i) { var p = r.p || {}; var has = N(p.hasil_pv_investasi) > 0, t = M.targetCabang(th, r.cabang_id); return [i + 1, r.cabang, has ? rpPlain(p.hasil_total_investasi) : '-', has ? rpPlain(p.hasil_pv_investasi) : '-', has ? rpPlain(p.hasil_total_impact) : '-', has ? rpPlain(p.hasil_pv_impact) : '-', has ? fmtNum(N(p.hasil_rasio), 2) : '-', t ? fmtNum(t, 2) : '-', has ? String(p.hasil_bintang) : '-', p.status || 'Belum Mulai', N(p.hasil_umkm) || '-']; }),
+        foot: [['', 'TOTAL DISETUJUI', rpPlain(w.totalInvestasi), rpPlain(w.pvInvestasi), rpPlain(w.totalImpact), rpPlain(w.pvImpact), fmtNum(w.ratio, 2), M.targetNasional(th) ? fmtNum(M.targetNasional(th), 2) : '-', String(Agg.bintangOf(w.ratio)), ok.length + ' cabang', fmtNum(w.umkm)]],
         footStyles: { fillColor: [234, 242, 251], textColor: [0, 63, 122] },
-        columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
+        columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } }
       });
-      doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); doc.text('Rata-rata tertimbang = Σ PV Impact ÷ Σ PV Investasi. Status selain Disetujui tidak dihitung pada total.', 14, doc.internal.pageSize.getHeight() - 8);
-      doc.save('Rekap_SROI_' + th + '.pdf'); toast('Rekap PDF diunduh.', 'ok');
+    } finally { doc.addPage = addOrig; }
+    doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); doc.text('Rata-rata tertimbang = Σ PV Impact ÷ Σ PV Investasi. Status selain Disetujui tidak dihitung pada total.', 14, H - 8);
+  },
+
+  /* ---------------- G4: Laporan manajemen (konsolidasi) + lampiran rekap ---------------- */
+  /** Agregasi seluruh cabang Disetujui: stakeholder (UMKM digabung jadi satu), per peran, total. */
+  mgmtAgg: function (th) {
+    var rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; }), w = Agg.weighted(ok);
+    var sh = {}, tot = 0;
+    ok.forEach(function (p) {
+      var arr = []; try { arr = JSON.parse(p.hasil_sebaran || '[]'); } catch (e) { }
+      var seen = {};
+      arr.forEach(function (s) {
+        var nm = String(s.n || '').trim(), umkm = /umkm/i.test(nm), key = umkm ? '__UMKM' : nm.toLowerCase().replace(/\s+/g, ' ');
+        if (!key) return;
+        var g = sh[key] = sh[key] || { nama: umkm ? 'UMKM Binaan' : nm, peranSet: {}, cab: {}, v: 0 };
+        g.peranSet[umkm ? 'Penerima Manfaat' : (s.p || 'Lainnya')] = 1; g.cab[p.cabang_id] = 1; g.v += Number(s.v) || 0; tot += Number(s.v) || 0;
+      });
+    });
+    var list = Object.keys(sh).map(function (k) { var g = sh[k]; return { nama: g.nama, peran: Object.keys(g.peranSet).join(', '), cabang: Object.keys(g.cab).length, v: g.v, porsi: tot ? g.v / tot : 0 }; }).sort(function (a, b) { return b.v - a.v; });
+    var pm = {}; list.forEach(function (s) { var k = s.peran.split(', ')[0]; (pm[k] = pm[k] || { peran: k, n: 0, v: 0 }); pm[k].n++; pm[k].v += s.v; });
+    var peran = Object.keys(pm).map(function (k) { var x = pm[k]; x.porsi = tot ? x.v / tot : 0; return x; }).sort(function (a, b) { return b.v - a.v; });
+    return { rows: rows, ok: ok, w: w, stakeholder: list, peran: peran, total: tot };
+  },
+  /** Draf penjelasan otomatis dari angka konsolidasi. */
+  mgmtDraft: function (th) {
+    var A = Exporter.mgmtAgg(th), w = A.w, tn = M.targetNasional(th);
+    if (!A.ok.length) return 'Belum ada laporan cabang yang disetujui untuk tahun ' + th + '.';
+    var srt = A.ok.slice().sort(function (a, b) { return N(b.hasil_rasio) - N(a.hasil_rasio); });
+    var t = 'Berdasarkan hasil penilaian SROI terhadap ' + A.ok.length + ' dari ' + A.rows.length + ' cabang yang telah disetujui pada tahun ' + th + ', total investasi program (nilai sekarang) sebesar ' + rpPlain(w.pvInvestasi) + ' menghasilkan nilai manfaat sosial (nilai sekarang) sebesar ' + rpPlain(w.pvImpact) + '. ';
+    t += 'Rasio SROI konsolidasi mencapai ' + fmtNum(w.ratio, 2) + ' : 1, artinya setiap Rp1 yang diinvestasikan menghasilkan sekitar Rp' + fmtNum(w.ratio, 2) + ' manfaat sosial (kategori Bintang ' + Agg.bintangOf(w.ratio) + ' — ' + (SroiEngine.LABEL_BINTANG[Agg.bintangOf(w.ratio)] || '') + ').';
+    if (tn) t += ' Capaian ini setara ' + pctFmt(w.ratio / tn, 0) + ' dari target nasional ' + fmtNum(tn, 2) + ' : 1' + (w.ratio >= tn ? ' (target tercapai).' : '.');
+    if (srt.length > 1) t += '\n\nRasio tertinggi dicapai Cabang ' + M.cabangName(srt[0].cabang_id) + ' (' + fmtNum(N(srt[0].hasil_rasio), 2) + ') dan terendah Cabang ' + M.cabangName(srt[srt.length - 1].cabang_id) + ' (' + fmtNum(N(srt[srt.length - 1].hasil_rasio), 2) + ').';
+    if (A.stakeholder.length) t += '\n\nPenerima manfaat terbesar adalah ' + A.stakeholder[0].nama + ' dengan porsi ' + pctFmt(A.stakeholder[0].porsi, 1) + ' dari total manfaat' + (A.stakeholder[1] ? ', diikuti ' + A.stakeholder[1].nama + ' (' + pctFmt(A.stakeholder[1].porsi, 1) + ')' : '') + '. Program menjangkau ' + fmtNum(w.umkm) + ' UMKM binaan.';
+    return t;
+  },
+  mgmtPdf: function (th, lap, btn) {
+    return this.run(btn, async function () {
+      var jsPDF = await loadPdf(), doc = new jsPDF({ unit: 'mm', format: 'a4' }), W = 210, A = Exporter.mgmtAgg(th), w = A.w, L = lap || {}, P = L.program || {};
+      var blue = hexRgb(UI.color_primary) || [0, 90, 171], dark = [26, 36, 51], muted = [91, 107, 127], final = A.ok.length === A.rows.length && A.rows.length > 0;
+      doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, 32, 'F');
+      doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5);
+      var jl = doc.splitTextToSize((P.judul || ('Laporan Konsolidasi SROI Tahun ' + th)).toUpperCase(), W - 28); doc.text(jl.slice(0, 2), 14, 12);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
+      doc.text((P.penyelenggara || CFG.ORG_NAME || 'DharmaImpact') + '  |  Tahun ' + th + '  |  Doc. No: ' + (P.doc_number || '-') + '  |  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), 14, 27);
+      var y = 40;
+      if (!final) {
+        doc.setFillColor(254, 226, 226); doc.rect(0, 32, W, 9, 'F'); doc.setFillColor(220, 38, 38); doc.rect(0, 32, 3, 9, 'F');
+        doc.setTextColor(185, 28, 28); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text('LAPORAN SEMENTARA — ' + A.ok.length + ' dari ' + A.rows.length + ' cabang disetujui', 14, 37.8); y = 49;
+      }
+      var sec = function (t) { if (y > 262) { doc.addPage(); y = 20; } doc.setTextColor.apply(doc, blue); doc.setFont('helvetica', 'bold'); doc.setFontSize(11.5); doc.text(t, 14, y); y += 2; };
+      var tblOpt = { theme: 'grid', styles: { fontSize: 8.8, cellPadding: 1.8, textColor: dark, lineColor: [226, 232, 240] }, headStyles: { fillColor: blue, textColor: 255, fontStyle: 'bold' }, margin: { left: 14, right: 14 } };
+      sec('A. DATA PROGRAM');
+      doc.autoTable(Object.assign({}, tblOpt, { startY: y, columnStyles: { 0: { cellWidth: 52, fontStyle: 'bold', fillColor: [248, 250, 252] } },
+        body: [['Nama Program', P.nama_program], ['Penyelenggara', P.penyelenggara || CFG.ORG_NAME], ['Periode Program', P.periode], ['Lokasi / Cakupan', P.lokasi], ['Penanggung Jawab', P.penanggung_jawab], ['Mitra Penilai', P.mitra_penilai], ['Metode Penilaian', P.metode], ['Tujuan Program', P.tujuan], ['Ruang Lingkup', P.ruang_lingkup]].map(function (x) { return [x[0], x[1] == null || x[1] === '' ? '-' : String(x[1])]; }) }));
+      y = doc.lastAutoTable.finalY + 8; sec('B. RINGKASAN HASIL KONSOLIDASI');
+      var tn = M.targetNasional(th);
+      doc.autoTable(Object.assign({}, tblOpt, { startY: y, columnStyles: { 0: { cellWidth: 70, fontStyle: 'bold', fillColor: [248, 250, 252] }, 1: { halign: 'right' } },
+        body: [['Cabang disetujui', A.ok.length + ' dari ' + A.rows.length + ' cabang'], ['Total Investasi (nominal / PV)', rpPlain(w.totalInvestasi) + ' / ' + rpPlain(w.pvInvestasi)], ['Total Manfaat (nominal / PV)', rpPlain(w.totalImpact) + ' / ' + rpPlain(w.pvImpact)],
+          ['Rasio SROI konsolidasi', A.ok.length ? fmtNum(w.ratio, 2) + ' : 1' : '-'], ['Target nasional', tn ? fmtNum(tn, 2) + ' : 1' + (A.ok.length ? '  (capaian ' + pctFmt(w.ratio / tn, 0) + ')' : '') : 'Belum ditetapkan'], ['Kategori dampak', A.ok.length ? 'Bintang ' + Agg.bintangOf(w.ratio) + ' — ' + (SroiEngine.LABEL_BINTANG[Agg.bintangOf(w.ratio)] || '') : '-'], ['UMKM binaan', fmtNum(w.umkm)]] }));
+      y = doc.lastAutoTable.finalY + 8; sec('C. SEBARAN MANFAAT PER STAKEHOLDER');
+      doc.autoTable(Object.assign({}, tblOpt, { startY: y, head: [['No', 'Stakeholder', 'Peran', 'Cabang', 'PV Manfaat', 'Porsi']], body: A.stakeholder.length ? A.stakeholder.map(function (s, i) { return [i + 1, s.nama, s.peran, s.cabang, rpPlain(s.v), pctFmt(s.porsi, 1)]; }) : [['', 'Belum ada cabang yang disetujui', '', '', '', '']],
+        foot: A.stakeholder.length ? [['', 'TOTAL', '', '', rpPlain(A.total), '100%']] : undefined, footStyles: { fillColor: [234, 242, 251], textColor: [0, 63, 122], fontStyle: 'bold' },
+        columnStyles: { 0: { cellWidth: 10 }, 3: { halign: 'center', cellWidth: 16 }, 4: { halign: 'right' }, 5: { halign: 'right', cellWidth: 18 } } }));
+      y = doc.lastAutoTable.finalY + 4;
+      if (A.peran.length) doc.autoTable(Object.assign({}, tblOpt, { startY: y, head: [['Kelompok Peran', 'Jumlah Stakeholder', 'PV Manfaat', 'Porsi']], body: A.peran.map(function (s) { return [s.peran, s.n, rpPlain(s.v), pctFmt(s.porsi, 1)]; }), columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } } }));
+      y = doc.lastAutoTable.finalY + 8; sec('D. PENJELASAN HASIL'); y += 4;
+      doc.setTextColor.apply(doc, dark); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.2);
+      doc.splitTextToSize(L.penjelasan || '-', W - 28).forEach(function (ln) { if (y > 280) { doc.addPage(); y = 20; } doc.text(ln, 14, y); y += 4.4; });
+      y += 6;
+      var pg = (L.pengesahan || []).filter(function (x) { return x && (x.tahap || x.nama || x.jabatan); });
+      var rowsN = Math.ceil(Math.max(1, pg.length) / 2);
+      if (y + 12 + rowsN * 42 > 285) { doc.addPage(); y = 20; }
+      sec('E. PENGESAHAN'); y += 4;
+      var bw = (W - 28 - 10) / 2;
+      if (!pg.length) { doc.setFontSize(9); doc.setTextColor.apply(doc, muted); doc.text('— belum ada susunan pengesahan —', 14, y + 4); }
+      pg.forEach(function (b, i) {
+        var col = i % 2, x = 14 + col * (bw + 10); if (col === 0 && i > 0) y += 42; if (y + 38 > 285) { doc.addPage(); y = 20; }
+        doc.setDrawColor(203, 213, 225); doc.rect(x, y, bw, 36);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor.apply(doc, muted); doc.text((b.tahap || '') + (b.tgl ? ', ' + b.tgl : ''), x + 4, y + 6);
+        doc.setTextColor.apply(doc, dark); doc.setFont('helvetica', 'bold'); doc.text(b.nama || '(.................................)', x + 4, y + 28);
+        doc.setFont('helvetica', 'normal'); doc.setTextColor.apply(doc, muted); doc.text(doc.splitTextToSize(b.jabatan || '', bw - 8)[0] || '', x + 4, y + 33);
+      });
+      // LAMPIRAN
+      doc.addPage('a4', 'landscape');
+      Exporter.rekapDraw(doc, th, 'LAMPIRAN — REKAP SROI SELURUH CABANG TAHUN ' + th);
+      var n = doc.getNumberOfPages();
+      for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(148, 163, 184); var pw = doc.internal.pageSize.getWidth(), ph = doc.internal.pageSize.getHeight(); doc.text('DharmaImpact • Laporan Konsolidasi SROI ' + th, 14, ph - 4); doc.text('Hal. ' + i + ' / ' + n, pw - 14, ph - 4, { align: 'right' }); }
+      doc.save('Laporan_Manajemen_SROI_' + th + '.pdf'); toast('Laporan manajemen (PDF) diunduh.', 'ok');
+    });
+  },
+  mgmtXlsx: function (th, lap, btn) {
+    return this.run(btn, async function () {
+      var L = await loadXStd(), rows = Exporter.rekapRows(th), ok = rows.filter(function (r) { return r.p && r.p.status === 'Disetujui'; }).map(function (r) { return r.p; });
+      await L.mgmt({ th: th, rows: rows, ok: ok, w: Agg.weighted(ok), M: M, Agg: Agg, target: function (cid) { return M.targetCabang(th, cid); }, targetNas: M.targetNasional(th), org: CFG.ORG_NAME || 'DharmaImpact', rpShort: rpShort, lap: lap, agg: Exporter.mgmtAgg(th) });
+      toast('Laporan manajemen (Excel) diunduh.', 'ok');
     });
   },
 
