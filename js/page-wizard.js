@@ -94,11 +94,13 @@ function ensureKpiRows() {
 /** Komponen proksi outcome (array yang bisa diedit) */
 function pkList(o) {
   if (!Array.isArray(o.proksi_list)) {
-    o.proksi_list = SroiEngine.proksiOf(o).map(function (c) { return { jenis: c.jenis, ref: c.ref, porsi: c.porsi, nilai: c.nilai == null ? '' : c.nilai, notes: c.notes || (c.jenis === 'MANUAL' ? (o.proxy_notes || '') : '') }; });
+    o.proksi_list = SroiEngine.proksiOf(o).map(function (c) { return { jenis: c.jenis, ref: c.ref, porsi: c.porsi, nilai: c.nilai == null ? '' : c.nilai, notes: c.notes || (c.jenis === 'MANUAL' ? (o.proxy_notes || '') : ''), dw: c.dw === '' ? 0 : c.dw, ds: c.ds === '' ? 0 : c.ds, at: c.at === '' ? 0 : c.at, 'do': c['do'] === '' ? 0 : c['do'] }; });
   }
-  if (!o.proksi_list.length) o.proksi_list.push({ jenis: '', ref: '', porsi: 100, nilai: '', notes: '' });
+  o.proksi_list.forEach(function (c) { ['dw', 'ds', 'at', 'do'].forEach(function (f) { if (c[f] === undefined) c[f] = (o[f] === undefined || o[f] === '' ? 0 : o[f]); }); });
+  if (!o.proksi_list.length) o.proksi_list.push(newPk());
   return o.proksi_list;
 }
+function newPk() { return { jenis: '', ref: '', porsi: 100, nilai: '', notes: '', dw: 0, ds: 0, at: 0, 'do': 0 }; }
 function kpiList() { return ((W.ctx && W.ctx.kpiMaster) || []).slice().sort(function (a, b) { return N(a.urutan) - N(b.urutan); }); }
 function dihitungList() { return String(W.data.proyek.sektor_dihitung || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
 function setDihitung(list) { W.data.proyek.sektor_dihitung = W.sektors.filter(function (s) { return list.indexOf(s) > -1; }).join(','); markDirty('info'); }
@@ -359,6 +361,8 @@ var STEP_RENDER = {
           '<div class="field"><label>Setelah porsi</label>' + calcCell('pkNP|' + key) + '</div>' +
           '<div class="field pk-full"><label>Sumber proksi</label><div class="chips">' + src + '</div></div>' +
           '<div class="field pk-full"><label>Catatan sumber proksi' + (j === 'MANUAL' ? ' *' : '') + '</label>' + inText('pk', key, 'notes', c.notes, 'Referensi / dasar nilai proksi') + '</div>' +
+          ['dw', 'ds', 'at', 'do'].map(function (f) { return '<div class="field"><label>' + f.toUpperCase() + ' ' + tip(f) + '</label>' + inNum('pk', key, f, c[f], 'pct') + '</div>'; }).join('') +
+          '<div class="field pk-full pk-imp"><span>Impact proksi ' + (ci + 1) + ' (tahun 1)</span>' + calcCell('pkImp|' + key) + '</div>' +
           '</div></div>';
       }).join('');
       var sh = d.stakeholder.filter(function (s) { return s.sh_id === o.sh_id; })[0];
@@ -375,14 +379,13 @@ var STEP_RENDER = {
         '<div class="field"><label>Durasi (tahun)</label>' + inNum('outcome', o.outcome_id, 'durasi_tahun', o.durasi_tahun || 1, 'dec') + '</div>' +
         '<div class="field"><label>Mulai</label>' + inSel('outcome', o.outcome_id, 'mulai', o.mulai || 1, [[1, 'Saat aktivitas'], [2, 'Setelah aktivitas']]) + '</div>' +
         '<div class="field s4"><label>Proksi outcome — bisa lebih dari satu jenis (R3: setiap outcome memakai sumber proksinya sendiri)</label>' + comps +
-        '<div class="row between"><button class="btn btn-sm ed" data-addpk="' + o.outcome_id + '">' + ic('plus') + ' Tambah jenis proksi</button><span class="row small" style="gap:8px"><b>Total nilai proksi</b><span class="calc" style="min-height:32px" data-c="ocNilai|' + o.outcome_id + '">—</span></span></div></div>' +
-        ['dw', 'ds', 'at', 'do'].map(function (f) { return '<div class="field"><label>' + f.toUpperCase() + ' ' + tip(f) + '</label>' + inNum('outcome', o.outcome_id, f, o[f], 'pct') + '</div>'; }).join('') +
+        '<div class="row between"><button class="btn btn-sm ed" data-addpk="' + o.outcome_id + '">' + ic('plus') + ' Tambah jenis proksi</button><span class="row small" style="gap:8px"><b>Total nilai proksi</b><span class="calc" style="min-height:32px" data-c="ocNilai|' + o.outcome_id + '">—</span><b>Total impact</b><span class="calc" style="min-height:32px" data-c="ocImpact|' + o.outcome_id + '">—</span></span></div></div>' +
         '<div class="field s2"><label>Catatan umum outcome</label>' + inText('outcome', o.outcome_id, 'proxy_notes', o.proxy_notes, 'Opsional') + '</div>' +
         '<div class="field s2"><label>PV impact (seluruh durasi)</label>' + calcCell('ocPv|' + o.outcome_id) + '</div>' +
         '</div></div>';
     }).join('');
     return cardSec('Pemakaian Sumber Proksi', 'Setiap sumber maksimal 100% di seluruh outcome & jenis proksi (R4/R5). Merah = terhitung dobel, perhitungan tidak bisa dikirim.', '', '<div class="card-pad" style="padding-top:0" data-c="usage|"></div>') +
-      cardSec('Impact Map', 'Satu outcome bisa memakai beberapa jenis proksi. F9 = Σ(nilai proksi × porsi) × (1−DW)(1−DS)(1−AT)(1−DO); F10 tahun berikutnya × (1−DO); F11 PV = Σ impact ÷ (1+r)^n.', addBtn('outcome', 'Tambah outcome'),
+      cardSec('Impact Map', 'Satu outcome bisa memakai beberapa jenis proksi, masing-masing dengan DW/DS/AT/DO sendiri. F9 = Σ[(nilai proksi × porsi) × (1−DW)(1−DS)(1−AT)(1−DO)] per proksi; F10 tahun berikutnya × (1−DO) per proksi; F11 PV = Σ impact ÷ (1+r)^n.', addBtn('outcome', 'Tambah outcome'),
         '<div class="card-pad" style="padding-top:0">' + (cards || '<div class="empty">Belum ada outcome. Klik <b>Tambah outcome</b>.</div>') + '</div>', 'F9–F11');
   },
 
@@ -451,6 +454,7 @@ function calcText(type, key) {
     case 'f5': return rp(r.benchmarkTotal);
     case 'mf': return rp(r.manfaat[key] || 0);
     case 'ocNilai': return rp((r.outcome[key] || {}).nilai_porsi || 0);
+    case 'pkImp': var ki = key.split('~'), ohi = r.outcome[ki[0]] || {}; return rp(((ohi.komponen || [])[+ki[1]] || {}).impact || 0);
     case 'pkNilai': case 'pkNP': var kp3 = key.split('~'), oh = r.outcome[kp3[0]] || {}, cc = (oh.komponen || [])[+kp3[1]] || {}; return rp(type === 'pkNilai' ? cc.nilai || 0 : cc.nilaiPorsi || 0);
     case 'ocImpact': return rp((r.outcome[key] || {}).impact || 0);
     case 'ocPv': var o = r.outcome[key] || {}; return rp(o.pv || 0) + ((o.impactTahun || []).length > 1 ? ' (' + o.impactTahun.length + ' th)' : '');
@@ -576,7 +580,7 @@ async function onWzClick(e) {
     else { refs = refs.filter(function (x) { return x !== 'ALL'; }); var ix = refs.indexOf(val); if (ix > -1) refs.splice(ix, 1); else refs.push(val); }
     o.ref = refs.join(','); markDirty('outcome'); return rerender();
   }
-  if (ds.addpk) { var oa = findRow('outcome', ds.addpk); pkList(oa).push({ jenis: '', ref: '', porsi: 100, nilai: '', notes: '' }); markDirty('outcome'); return rerender(); }
+  if (ds.addpk) { var oa = findRow('outcome', ds.addpk); pkList(oa).push(newPk()); markDirty('outcome'); return rerender(); }
   if (ds.delpk) { var dp = ds.delpk.split('~'), od = findRow('outcome', dp[0]); pkList(od).splice(+dp[1], 1); markDirty('outcome'); return rerender(); }
   if (ds.add) return addRow(ds.add, ds);
   if (ds.del) return delRow(ds.del);
@@ -604,7 +608,7 @@ function addRow(sec, ds) {
     biaya: { biaya_id: uid('BY'), sh_id: ds.sh, kelompok: 'Implementasi', komponen: '', metode: 'MANUAL', kegiatan_id: '', qty: '', tarif: '', nilai: '', keterangan: '' },
     benchmark: { bm_id: uid('BM'), kegiatan_id: '', biaya_internal_per_peserta: '', nama_expert: '', biaya_expert_per_peserta: '', jumlah_peserta: '' },
     manfaat: { mf_id: uid('MF'), sh_id: '', parameter: '', metode: 'SELISIH', nilai_a: '', nilai_b: '', nilai_hasil: '', keterangan: '' },
-    outcome: { outcome_id: uid('OC'), sh_id: firstPM, input_ref: '', output_ringkas: '', deskripsi_outcome: '', indikator_sebelum: '', indikator_sesudah: '', sumber_informasi: '', durasi_tahun: 1, mulai: 1, jenis_proksi: '', ref_proksi: '', porsi_proksi: 100, nilai_proksi: '', proxy_notes: '', dw: 0, ds: 0, at: 0, 'do': 0, proksi_list: [{ jenis: '', ref: '', porsi: 100, nilai: '', notes: '' }] }
+    outcome: { outcome_id: uid('OC'), sh_id: firstPM, input_ref: '', output_ringkas: '', deskripsi_outcome: '', indikator_sebelum: '', indikator_sesudah: '', sumber_informasi: '', durasi_tahun: 1, mulai: 1, jenis_proksi: '', ref_proksi: '', porsi_proksi: 100, nilai_proksi: '', proxy_notes: '', dw: 0, ds: 0, at: 0, 'do': 0, proksi_list: [newPk()] }
   };
   var r = rows[sec]; if (!r) return;
   d[sec].push(r); markDirty(sec);
@@ -660,6 +664,7 @@ function buildPayload() {
       o.jenis_proksi = pl.length > 1 ? 'CAMPURAN' : (pl[0] || {}).jenis || '';
       o.ref_proksi = pl.length === 1 ? (pl[0].ref || '') : '';
       o.porsi_proksi = pl.length === 1 ? pl[0].porsi : '';
+      ['dw', 'ds', 'at', 'do'].forEach(function (f) { o[f] = pl.length === 1 ? pl[0][f] : ''; });
       o.nilai_proksi = Math.round(h.nilai_porsi || 0); o.impact = Math.round(h.impact || 0);
       o.proksi_list = JSON.stringify(pl);
     });

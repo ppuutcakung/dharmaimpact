@@ -18,6 +18,7 @@ async function loadPdf() { await loadScript(LIB.jspdf); await loadScript(LIB.aut
 async function loadXlsx() { await loadScript(LIB.xlsx); return window.XLSX; }
 var PK_NAMA = { KPI_BUDGET: 'KPI×Budget', BENCHMARK: 'Benchmark', NET_PROFIT: 'Net Profit', MANFAAT_SH: 'Manfaat SH', MANUAL: 'Manual' };
 function pkText(h) { return (h.komponen || []).map(function (c) { return PK_NAMA[c.jenis] || c.jenis || '-'; }).join(' + ') || '-'; }
+function pkF(h, f) { return (h.komponen || []).map(function (c) { return fmtNum(c[f], 1) + '%'; }).join(' / ') || '-'; }
 function pkPorsi(h) { return (h.komponen || []).map(function (c) { return fmtNum(c.porsi, 1) + '%'; }).join(' + ') || '-'; }
 function fileSafe(s) { return String(s || '').replace(/[^\w\-]+/g, '_').replace(/_+/g, '_'); }
 function rpPlain(v) { return 'Rp ' + Math.round(Number(v) || 0).toLocaleString('id-ID'); }
@@ -94,7 +95,7 @@ var Exporter = {
       doc.autoTable(Object.assign({}, tblOpt, {
         startY: 21, styles: Object.assign({}, tblOpt.styles, { fontSize: 7.2 }),
         head: [['No', 'Stakeholder', 'Outcome', 'Indikator (sebelum → sesudah)', 'Jenis Proksi', 'Nilai Proksi', 'Porsi', 'DW', 'DS', 'AT', 'DO', 'Durasi', 'Impact Th-1', 'PV Impact']],
-        body: d.outcome.map(function (o, i) { var h = r.outcome[o.outcome_id] || {}; return [i + 1, shName(o.sh_id), o.deskripsi_outcome || o.output_ringkas || '-', (o.indikator_sebelum || '-') + ' → ' + (o.indikator_sesudah || '-'), pkText(h), rpPlain(h.nilai_proksi), pkPorsi(h), fmtNum(N(o.dw), 1) + '%', fmtNum(N(o.ds), 1) + '%', fmtNum(N(o.at), 1) + '%', fmtNum(N(o['do']), 1) + '%', (o.durasi_tahun || 1) + ' th', rpPlain(h.impact), rpPlain(h.pv)]; }),
+        body: d.outcome.map(function (o, i) { var h = r.outcome[o.outcome_id] || {}; return [i + 1, shName(o.sh_id), o.deskripsi_outcome || o.output_ringkas || '-', (o.indikator_sebelum || '-') + ' → ' + (o.indikator_sesudah || '-'), pkText(h), rpPlain(h.nilai_proksi), pkPorsi(h), pkF(h, 'dw'), pkF(h, 'ds'), pkF(h, 'at'), pkF(h, 'do'), (o.durasi_tahun || 1) + ' th', rpPlain(h.impact), rpPlain(h.pv)]; }),
         foot: [['', '', '', '', '', '', '', '', '', '', '', 'TOTAL', rpPlain(r.totalImpact), rpPlain(r.pvImpact)]],
         footStyles: { fillColor: [234, 242, 251], textColor: [0, 63, 122], fontStyle: 'bold' },
         columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' }, 12: { halign: 'right' }, 13: { halign: 'right' } }
@@ -124,7 +125,7 @@ var Exporter = {
         .concat([[], ['Penjelasan Kualitatif', p.penjelasan_kualitatif], [], ['C. PENGESAHAN'], ['PIC Pelaksana', p.pic_mitra || p.project_owner], ['Mitra Penilai', p.tim_leader_penilai + ' — ' + (p.mitra_penilai || '')]]), [26, 46, 18, 18, 40]);
       // 2. Impact Map
       add('Impact Map', [['No', 'Stakeholder', 'Input', 'Output', 'Outcome', 'Indikator Sebelum', 'Indikator Sesudah', 'Sumber Informasi', 'Durasi (th)', 'Mulai', 'Jenis Proksi', 'Sumber Proksi', 'Porsi %', 'Nilai Proksi (setelah porsi)', 'Catatan Proksi', 'DW %', 'DS %', 'AT %', 'DO %', 'Impact Th-1', 'PV Impact']]
-        .concat(d.outcome.map(function (o, i) { var h = r.outcome[o.outcome_id] || {}; return [i + 1, shName(o.sh_id), o.input_ref, o.output_ringkas, o.deskripsi_outcome, o.indikator_sebelum, o.indikator_sesudah, o.sumber_informasi, N(o.durasi_tahun) || 1, N(o.mulai) === 2 ? 'Setelah aktivitas' : 'Saat aktivitas', pkText(h), (h.komponen || []).map(function (c) { return c.ref; }).join(' | '), pkPorsi(h), Math.round(h.nilai_porsi || 0), (h.komponen || []).map(function (c) { return c.notes; }).filter(Boolean).concat(o.proxy_notes ? [o.proxy_notes] : []).join(' | '), N(o.dw), N(o.ds), N(o.at), N(o['do']), Math.round(h.impact || 0), Math.round(h.pv || 0)]; }))
+        .concat(d.outcome.map(function (o, i) { var h = r.outcome[o.outcome_id] || {}; return [i + 1, shName(o.sh_id), o.input_ref, o.output_ringkas, o.deskripsi_outcome, o.indikator_sebelum, o.indikator_sesudah, o.sumber_informasi, N(o.durasi_tahun) || 1, N(o.mulai) === 2 ? 'Setelah aktivitas' : 'Saat aktivitas', pkText(h), (h.komponen || []).map(function (c) { return c.ref; }).join(' | '), pkPorsi(h), Math.round(h.nilai_porsi || 0), (h.komponen || []).map(function (c) { return c.notes; }).filter(Boolean).concat(o.proxy_notes ? [o.proxy_notes] : []).join(' | '), pkF(h, 'dw'), pkF(h, 'ds'), pkF(h, 'at'), pkF(h, 'do'), Math.round(h.impact || 0), Math.round(h.pv || 0)]; }))
         .concat([[], ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'TOTAL', Math.round(r.totalImpact), Math.round(r.pvImpact)]]), [5, 22, 18, 24, 30, 16, 16, 18, 8, 14, 14, 18, 8, 16, 22, 6, 6, 6, 6, 16, 16]);
       // 3. Input
       var inRows = [['Stakeholder', 'Kelompok', 'Komponen', 'Metode', 'Kegiatan', 'Qty', 'Tarif', 'Nilai', 'Keterangan']];

@@ -12,7 +12,7 @@
 var SroiEngine = (function () {
   'use strict';
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.3.0';
 
   /* ---------- util angka (data tersimpan: Number atau string "1234.5") ---------- */
   function n(v) {
@@ -39,7 +39,9 @@ var SroiEngine = (function () {
       if (!o.jenis_proksi && !o.ref_proksi) return [];
       list = [{ jenis: o.jenis_proksi, ref: o.ref_proksi, porsi: o.porsi_proksi, nilai: o.nilai_proksi, notes: '' }];
     }
-    return list.map(function (c) { c = c || {}; return { jenis: String(c.jenis || '').toUpperCase(), ref: c.ref == null ? '' : String(c.ref), porsi: n(c.porsi === '' || c.porsi == null ? 100 : c.porsi), nilai: c.nilai, notes: c.notes || '' }; });
+    var fb = function (c, f) { return (c[f] === undefined || c[f] === null || c[f] === '') ? (o[f] === undefined || o[f] === null ? '' : o[f]) : c[f]; };
+    return list.map(function (c) { c = c || {}; return { jenis: String(c.jenis || '').toUpperCase(), ref: c.ref == null ? '' : String(c.ref), porsi: n(c.porsi === '' || c.porsi == null ? 100 : c.porsi), nilai: c.nilai, notes: c.notes || '',
+      dw: fb(c, 'dw'), ds: fb(c, 'ds'), at: fb(c, 'at'), 'do': fb(c, 'do') }; });
   }
 
   /** Parameter baku → objek siap pakai */
@@ -243,7 +245,7 @@ var SroiEngine = (function () {
             nilai += omsetHasil[id] ? omsetHasil[id].f7 : 0;
             use('NP:' + id, 'Net profit ' + (u.nama_umkm || ''), 'NET_PROFIT', porsi, o.outcome_id);
           });
-          if (adj(o) < 1) warnings.push({ step: 7, msg: cl + ': proksi Net Profit sudah dikurangi faktor penyesuaian per UMKM (F7). Isi 0% di faktor outcome ini bila tidak ingin dikurangi dua kali.' });
+          if (adj(c) < 1) warnings.push({ step: 7, msg: cl + ': proksi Net Profit sudah dikurangi faktor penyesuaian per UMKM (F7). Isi 0% di DW/DS/AT/DO proksi ini bila tidak ingin dikurangi dua kali.' });
         } else if (jenis === 'MANFAAT_SH') {
           var mfs = refs[0] === 'ALL' ? [] : refs;
           mfs.forEach(function (id) {
@@ -257,16 +259,17 @@ var SroiEngine = (function () {
           if (isBlank(c.notes) && isBlank(o.proxy_notes)) errors.push({ step: 7, msg: cl + ': proksi MANUAL wajib diisi catatan sumber proksi.' });
         }
         if (porsi < 0 || porsi > 100) errors.push({ step: 7, msg: cl + ': porsi proksi harus 0–100%.' });
-        var np = nilai * pct(porsi);
+        ['dw', 'ds', 'at', 'do'].forEach(function (f) { var x = n(c[f]); if (x < 0 || x > 100) errors.push({ step: 7, msg: cl + ': faktor ' + f.toUpperCase() + ' di luar 0–100%.' }); });
+        var np = nilai * pct(porsi), imp = np * adj(c);                                           // F9 per proksi
         nilaiTot += nilai; nilaiPorsiTot += np;
-        kompHasil.push({ jenis: jenis, ref: c.ref, porsi: porsi, nilai: nilai, nilaiPorsi: np, notes: c.notes || '' });
+        kompHasil.push({ jenis: jenis, ref: c.ref, porsi: porsi, nilai: nilai, nilaiPorsi: np, impact: imp, dw: n(c.dw), ds: n(c.ds), at: n(c.at), 'do': n(c['do']), notes: c.notes || '' });
       });
-      ['dw', 'ds', 'at', 'do'].forEach(function (f) { var x = n(o[f]); if (x < 0 || x > 100) errors.push({ step: 7, msg: label + ': faktor ' + f.toUpperCase() + ' di luar 0–100%.' }); });
 
-      var y1 = nilaiPorsiTot * adj(o);                                                              // F9 = Σ(nilai proksi × porsi) × penyesuaian
-      var dur = Math.max(1, Math.round(n(o.durasi_tahun) || 1)), years = [], pv = 0, sumNom = 0, cur = y1;
+      // F9 = Σ[(nilai proksi × porsi) × (1−DW)(1−DS)(1−AT)(1−DO)] tiap proksi; F10 drop-off per proksi
+      var y1 = kompHasil.reduce(function (a, k) { return a + k.impact; }, 0);
+      var dur = Math.max(1, Math.round(n(o.durasi_tahun) || 1)), years = [], pv = 0, sumNom = 0;
       for (var t = 1; t <= dur; t++) {
-        if (t > 1) cur = cur * (1 - pct(o['do']));                                                  // F10
+        var cur = kompHasil.reduce(function (a, k) { return a + k.impact * Math.pow(1 - pct(k['do']), t - 1); }, 0);   // F10
         years.push(cur); sumNom += cur; pv += cur / Math.pow(1 + P.r, t);                           // F11
       }
       ocHasil[o.outcome_id] = { nilai_proksi: nilaiTot, nilai_porsi: nilaiPorsiTot, komponen: kompHasil, impact: y1, impactTahun: years, impactNominal: sumNom, pv: pv };
