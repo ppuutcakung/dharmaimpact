@@ -472,3 +472,20 @@ i.tmark { display: inline-block; width: 4px; height: 12px; border-radius: 1px; b
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 @media (max-width: 560px) { .cred { grid-template-columns: 1fr; } }
 .pv svg { width: 13px; height: 13px; vertical-align: -2px; }
+
+/* grafik menyesuaikan ukuran kartu */
+.chart-px svg { width: auto; max-width: 100%; height: auto; }
+.chart-box { position: relative; min-height: 200px; }
+.chart-box > .chart, .chart-box > .empty { position: absolute; inset: 0; }
+.chart-box > .chart svg { width: 100%; height: 100%; }
+.card.flex-col { display: flex; flex-direction: column; }
+.card-pad.chart-col { flex: 1; display: flex; flex-direction: column; padding-top: 0; }
+.chart-box.grow { flex: 1; min-height: 210px; }
+.chart-note { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 11.5px; line-height: 18px; color: var(--muted); }
+.chart-note:empty { display: none; }
+.chart-note b { color: var(--text); font-weight: 700; }
+.chart-note i { font-style: normal; color: #CBD5E1; margin: 0 2px; }
+.chart-note .ok { color: #15803D; font-weight: 600; }
+.chart-note .warn { color: #B45309; font-weight: 600; }
+.card-pad.bar-col { justify-content: center; }
+.card-pad.bar-col > #dBar { min-height: 60px; }
