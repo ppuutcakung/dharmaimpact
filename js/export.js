@@ -142,7 +142,7 @@ var Exporter = {
       add('Output', out, [28, 16, 18, 18, 10, 18, 8, 8, 8, 8, 16]);
       // 5. Detail Program
       var kg = d.kegiatan, hm = {}; d.kehadiran.forEach(function (h) { hm[h.umkm_id + '|' + h.kegiatan_id] = N(h.jumlah); });
-      var det = [['KEGIATAN'], ['Program', 'Kegiatan', 'Waktu', 'Durasi (hari)', 'Biaya', 'Penanggung', 'Peserta', 'Jumlah UMKM']].concat(kg.map(function (g) { var st = r.kegiatanStat[g.kegiatan_id] || {}; return [M.programName(g.program_id), g.nama_kegiatan, g.waktu, N(g.durasi_hari), N(g.biaya), shName(g.sh_pembiaya_id), st.peserta || 0, st.umkm || 0]; }))
+      var det = [['KEGIATAN'], ['Program', 'Kegiatan', 'Waktu', 'Durasi (hari)', 'Biaya', 'Penanggung', 'Peserta']].concat(kg.map(function (g) { var st = r.kegiatanStat[g.kegiatan_id] || {}; return [M.programName(g.program_id), g.nama_kegiatan, g.waktu, N(g.durasi_hari), N(g.biaya), shName(g.sh_pembiaya_id), st.peserta || 0]; }))
         .concat([[], ['MATRIKS KEHADIRAN UMKM'], ['No', 'UMKM', 'Sektor', 'Status Khusus'].concat(kg.map(function (g) { return g.nama_kegiatan; })).concat(['Total'])])
         .concat(d.umkm.map(function (u, i) { var tot = 0, cells = kg.map(function (g) { var v = hm[u.umkm_id + '|' + g.kegiatan_id] || 0; tot += v; return v || ''; }); return [i + 1, u.nama_umkm, M.sektorName(u.sektor_id), u.status_khusus].concat(cells).concat([tot]); }));
       add('Detail Program', det, [6, 28, 16, 14].concat(kg.map(function () { return 12; })));

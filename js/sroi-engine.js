@@ -129,11 +129,13 @@ var SroiEngine = (function () {
 
     /* ---------- C3: kegiatan & kehadiran (R8: peserta dari KEHADIRAN) ---------- */
     var kegStat = {};
-    keg.forEach(function (g) { kegStat[g.kegiatan_id] = { peserta: 0, umkm: 0 }; });
+    keg.forEach(function (g) { kegStat[g.kegiatan_id] = { peserta: 0, umkm: 0, hadir: 0, manual: false }; });
     hadir.forEach(function (h) {
       var st = kegStat[h.kegiatan_id]; if (!st || !umkmById[h.umkm_id]) return;
-      var j = n(h.jumlah); if (j > 0) { st.peserta += j; st.umkm += 1; }
+      var j = n(h.jumlah); if (j > 0) { st.hadir += j; st.umkm += 1; }
     });
+    /* Peserta per kegiatan: isian langsung bila diisi, selain itu dari matriks kehadiran */
+    keg.forEach(function (g) { var st = kegStat[g.kegiatan_id]; if (!isBlank(g.jumlah_peserta)) { st.peserta = n(g.jumlah_peserta); st.manual = true; } else st.peserta = st.hadir; });
 
     /* ---------- C4: biaya (F4) & total investasi (F12, R2) ---------- */
     var perSh = {}; // sh_id → subtotal investasi

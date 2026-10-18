@@ -240,21 +240,21 @@ var STEP_RENDER = {
     var d = W.data, progs = M.program(), shO = shOpts();
     var kegHtml = progs.map(function (pg) {
       var rows = d.kegiatan.filter(function (g) { return g.program_id === pg.program_id; });
-      return '<tr class="grp"><td colspan="8"><span class="row" style="position:sticky;left:8px;display:inline-flex"><span>' + esc(pg.nama_program) + ' <span class="badge ' + (pg.jenis === 'UTAMA' ? 'badge-info' : 'st-Draft') + '" style="height:20px">' + esc(pg.jenis) + '</span></span>' + addBtn('kegiatan', 'Tambah kegiatan', ' data-prog="' + pg.program_id + '"') + '</span></td></tr>' +
+      return '<tr class="grp"><td colspan="7"><span class="row" style="position:sticky;left:8px;display:inline-flex"><span>' + esc(pg.nama_program) + ' <span class="badge ' + (pg.jenis === 'UTAMA' ? 'badge-info' : 'st-Draft') + '" style="height:20px">' + esc(pg.jenis) + '</span></span>' + addBtn('kegiatan', 'Tambah kegiatan', ' data-prog="' + pg.program_id + '"') + '</span></td></tr>' +
         rows.map(function (g) {
           return '<tr><td>' + inText('kegiatan', g.kegiatan_id, 'nama_kegiatan', g.nama_kegiatan, 'Nama kegiatan') + '</td><td>' + inText('kegiatan', g.kegiatan_id, 'waktu', g.waktu, 'Mar 2026') + '</td><td style="width:90px">' + inNum('kegiatan', g.kegiatan_id, 'durasi_hari', g.durasi_hari, 'dec') + '</td>' +
             '<td style="min-width:140px">' + inNum('kegiatan', g.kegiatan_id, 'biaya', g.biaya, 'money') + '</td><td style="min-width:150px">' + inSel('kegiatan', g.kegiatan_id, 'sh_pembiaya_id', g.sh_pembiaya_id, shO, false, '— penanggung —') + '</td>' +
-            '<td style="width:80px">' + calcCell('kegP|' + g.kegiatan_id) + '</td><td style="width:80px">' + calcCell('kegU|' + g.kegiatan_id) + '</td><td class="act">' + delBtn('kegiatan', g.kegiatan_id) + '</td></tr>';
+            '<td style="width:110px">' + inNum('kegiatan', g.kegiatan_id, 'jumlah_peserta', g.jumlah_peserta, 'dec', String((W.res.kegiatanStat[g.kegiatan_id] || {}).hadir || 0)) + '</td><td class="act">' + delBtn('kegiatan', g.kegiatan_id) + '</td></tr>';
         }).join('');
     }).join('');
     var um = d.umkm, kg = d.kegiatan, hm = {};
     d.kehadiran.forEach(function (h) { hm[h.umkm_id + '|' + h.kegiatan_id] = h.jumlah; });
     var matrix = um.length && kg.length ? '<div class="tbl-wrap" style="max-height:520px"><table class="tbl matrix"><thead><tr><th>UMKM</th>' + kg.map(function (g) { return '<th class="vert" title="' + esc(kegLabel(g)) + '">' + esc(trunc(g.nama_kegiatan || '(kegiatan)', 26)) + '<div class="tiny muted" style="font-weight:400">' + esc(trunc(M.programName(g.program_id), 14)) + '</div>' + (W.ro ? '' : '<button class="btn btn-xs btn-ghost ed" data-hall="' + g.kegiatan_id + '" title="Isi 1 untuk semua UMKM">✓ semua</button>') + '</th>'; }).join('') + '<th class="r">Total</th></tr></thead><tbody>' +
       um.map(function (u) { return '<tr><td><b>' + esc(u.nama_umkm || '(UMKM)') + '</b><span class="sub">' + esc(M.sektorName(u.sektor_id)) + '</span></td>' + kg.map(function (g) { var v = hm[u.umkm_id + '|' + g.kegiatan_id]; return '<td><input class="inp' + (N(v) > 0 ? ' on' : '') + '" inputmode="numeric" data-h="' + u.umkm_id + '|' + g.kegiatan_id + '" value="' + (N(v) > 0 ? N(v) : '') + '"></td>'; }).join('') + '<td class="r b" data-c="hRow|' + u.umkm_id + '">—</td></tr>'; }).join('') +
-      '</tbody><tfoot><tr><td>Jumlah peserta</td>' + kg.map(function (g) { return '<td class="c" data-c="kegP|' + g.kegiatan_id + '">—</td>'; }).join('') + '<td></td></tr></tfoot></table></div>'
+      '</tbody><tfoot><tr><td>Jumlah hadir</td>' + kg.map(function (g) { return '<td class="c" data-c="kegH|' + g.kegiatan_id + '">—</td>'; }).join('') + '<td></td></tr></tfoot></table></div>'
       : '<div class="empty">Isi daftar kegiatan dan UMKM terlebih dahulu untuk menampilkan matriks kehadiran.</div>';
-    return cardSec('A. Kegiatan per Program', 'Biaya kegiatan otomatis masuk Total Investasi stakeholder penanggungnya (R2). Peserta dihitung dari matriks kehadiran (R8).', '',
-      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th style="min-width:200px">Nama Kegiatan</th><th style="min-width:110px">Waktu</th><th class="r">Durasi (hari)</th><th class="r">Biaya (Rp)</th><th>Penanggung Biaya</th><th class="r">Peserta</th><th class="r">UMKM</th><th></th></tr></thead><tbody>' + kegHtml + '</tbody></table></div>') +
+    return cardSec('A. Kegiatan per Program', 'Biaya kegiatan otomatis masuk Total Investasi stakeholder penanggungnya (R2). Peserta bisa diisi langsung; bila dikosongkan, otomatis memakai jumlah hadir dari matriks kehadiran (angka abu-abu).', '',
+      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th style="min-width:200px">Nama Kegiatan</th><th style="min-width:110px">Waktu</th><th class="r">Durasi (hari)</th><th class="r">Biaya (Rp)</th><th>Penanggung Biaya</th><th class="r">Peserta</th><th></th></tr></thead><tbody>' + kegHtml + '</tbody></table></div>') +
       cardSec('B. Daftar UMKM Binaan', um.length + ' UMKM terdaftar. Data omset di langkah 5 mengikuti daftar ini.', '<button class="btn btn-sm ed" data-paste-umkm>' + ic('copy') + ' Tempel dari Excel</button>' + addBtn('umkm', 'Tambah UMKM'),
         '<div class="tbl-wrap" style="max-height:440px"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:220px">Nama UMKM</th><th style="min-width:170px">Sektor</th><th style="min-width:150px">Status Khusus</th><th></th></tr></thead><tbody>' +
         (um.length ? um.map(function (u, i) { return '<tr><td class="muted">' + (i + 1) + '</td><td>' + inText('umkm', u.umkm_id, 'nama_umkm', u.nama_umkm, 'Nama UMKM') + '</td><td>' + inSel('umkm', u.umkm_id, 'sektor_id', u.sektor_id, sektorOpts(), true, '— sektor —') + '</td><td>' + inSel('umkm', u.umkm_id, 'status_khusus', u.status_khusus, ['Naik Kelas', 'Mandiri'], false, '—') + '</td><td class="act">' + delBtn('umkm', u.umkm_id) + '</td></tr>'; }).join('') : '<tr><td colspan="5"><div class="empty">Belum ada UMKM.</div></td></tr>') + '</tbody></table></div>') +
@@ -417,6 +417,7 @@ function calcText(type, key) {
     case 'f17': return pctFmt(r.kpi.proporsiSektor[key] || 0, 2);
     case 'kegP': return fmtNum((r.kegiatanStat[key] || {}).peserta || 0);
     case 'kegU': return fmtNum((r.kegiatanStat[key] || {}).umkm || 0);
+    case 'kegH': return fmtNum((r.kegiatanStat[key] || {}).hadir || 0);
     case 'hRow': var s = 0; d.kehadiran.forEach(function (h) { if (h.umkm_id === key) s += N(h.jumlah); }); return fmtNum(s);
     case 'biaya': return rp(r.biaya[key] || 0);
     case 'shKeg': var sk = 0; d.kegiatan.forEach(function (g) { if (g.sh_pembiaya_id === key) sk += N(g.biaya); }); return rp(sk);
@@ -445,6 +446,7 @@ function updateCalc() {
     el.textContent = calcText(t, k);
     if (t === 'chk') el.style.color = /⚠/.test(el.textContent) ? 'var(--red-solid)' : '#15803D';
   });
+  $$('input[data-b$="|jumlah_peserta"]', main).forEach(function (el) { var id = el.dataset.b.split('|')[1]; el.placeholder = String((W.res.kegiatanStat[id] || {}).hadir || 0); });
   updatePanel();
 }
 function usageHtml() {
@@ -573,7 +575,7 @@ function addRow(sec, ds) {
   var pel = (d.stakeholder.filter(function (s) { return s.peran === 'Pelaksana'; })[0] || {}).sh_id || '';
   var rows = {
     stakeholder: { sh_id: uid('SH'), nama: '', peran: '', alasan_penyertaan: '', kelompok_sektor: '' },
-    kegiatan: { kegiatan_id: uid('KG'), program_id: ds.prog, nama_kegiatan: '', waktu: '', durasi_hari: 1, biaya: '', sh_pembiaya_id: pel, keterangan: '' },
+    kegiatan: { kegiatan_id: uid('KG'), program_id: ds.prog, nama_kegiatan: '', waktu: '', durasi_hari: 1, biaya: '', sh_pembiaya_id: pel, keterangan: '', jumlah_peserta: '' },
     umkm: { umkm_id: uid('UM'), nama_umkm: '', sektor_id: W.sektors[0] || '', status_khusus: '' },
     biaya: { biaya_id: uid('BY'), sh_id: ds.sh, kelompok: 'Implementasi', komponen: '', metode: 'MANUAL', kegiatan_id: '', qty: '', tarif: '', nilai: '', keterangan: '' },
     benchmark: { bm_id: uid('BM'), kegiatan_id: '', biaya_internal_per_peserta: '', nama_expert: '', biaya_expert_per_peserta: '', jumlah_peserta: '' },
