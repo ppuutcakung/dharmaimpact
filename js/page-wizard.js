@@ -134,7 +134,7 @@ function renderStep() {
   var main = $('#wzMain'); if (!main) return;
   main.innerHTML = STEP_RENDER[W.step]() +
     '<div class="wz-nav"><button class="btn" data-go="' + (W.step - 1) + '"' + (W.step === 1 ? ' disabled' : '') + '>' + ic('chevron-left') + ' Sebelumnya</button>' +
-    (W.step < 8 ? '<button class="btn btn-primary" data-go="' + (W.step + 1) + '">Berikutnya: ' + esc(STEPS[W.step].t) + ' ' + ic('chevron-right') + '</button>' : '<span></span>') + '</div>';
+    (W.step < 8 ? '<button class="btn btn-primary" data-go="' + (W.step + 1) + '">Berikutnya<span class="nx">: ' + esc(STEPS[W.step].t) + '</span> ' + ic('chevron-right') + '</button>' : '<span></span>') + '</div>';
   if (W.ro) $$('input,select,textarea', main).forEach(function (x) { if (!x.closest('.ro-ok')) x.disabled = true; });
   updateCalc();
 }
@@ -295,7 +295,7 @@ var STEP_RENDER = {
       '<button class="btn" data-bulk-omset>' + ic('copy') + ' Terapkan ke semua</button></div></div>')) +
       cardSec('Kenaikan Net Profit per UMKM', 'F6 = (omset sesudah − sebelum) × margin; F7 = F6 × (1−DW)(1−DS)(1−AT)(1−DO); F8 = Σ F7 semua UMKM (R6, R7).', '',
         '<div class="tbl-wrap" style="max-height:560px"><table class="tbl edit"><thead><tr><th style="min-width:170px">UMKM</th><th class="r" style="min-width:140px">Omset Sebelum</th><th class="r" style="min-width:140px">Omset Sesudah</th><th class="r" style="min-width:100px">Margin ' + tip('margin') + '</th><th class="r" style="min-width:130px">∆ Net Profit (F6)</th>' +
-        ['dw', 'ds', 'at', 'do'].map(function (f) { return '<th class="r" style="min-width:86px">' + f.toUpperCase() + ' ' + tip(f) + '</th>'; }).join('') + '<th class="r" style="min-width:130px">Impact (F7)</th></tr></thead><tbody>' +
+        ['dw', 'ds', 'at', 'do'].map(function (f) { return '<th class="r" style="min-width:104px">' + f.toUpperCase() + ' ' + tip(f) + '</th>'; }).join('') + '<th class="r" style="min-width:130px">Impact (F7)</th></tr></thead><tbody>' +
         d.umkm.map(function (u) {
           var o = om[u.umkm_id] || {};
           return '<tr><td><b>' + esc(u.nama_umkm || '(UMKM)') + '</b><span class="sub">' + esc(M.sektorName(u.sektor_id)) + '</span></td><td>' + inNum('omset', u.umkm_id, 'omset_sebelum', o.omset_sebelum, 'money') + '</td><td>' + inNum('omset', u.umkm_id, 'omset_sesudah', o.omset_sesudah, 'money') + '</td>' +
