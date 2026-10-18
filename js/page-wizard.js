@@ -151,6 +151,7 @@ function renderStep() {
     '<div class="wz-nav"><button class="btn" data-go="' + (W.step - 1) + '"' + (W.step === 1 ? ' disabled' : '') + '>' + ic('chevron-left') + ' Sebelumnya</button>' +
     (W.step < 8 ? '<button class="btn btn-primary" data-go="' + (W.step + 1) + '">Berikutnya<span class="nx">: ' + esc(STEPS[W.step].t) + '</span> ' + ic('chevron-right') + '</button>' : '<span></span>') + '</div>';
   if (W.ro) $$('input,select,textarea', main).forEach(function (x) { if (!x.closest('.ro-ok')) x.disabled = true; });
+  $$('textarea', main).forEach(autoGrow);
   updateCalc();
 }
 function goStep(n) {
@@ -221,11 +222,11 @@ var STEP_RENDER = {
     if (!kpis.length) return info + cardSec('KPI Cabang', '', '', '<div class="empty">KPI cabang tahun ' + th + ' belum diatur Super Admin.</div>');
     // A. KPI cabang (akumulasi)
     var a = cardSec('A. Capaian KPI Cabang (akumulasi semua sektor)', 'Bobot, target, dan satuan dikunci dari data induk. Isi <b>realisasi akumulasi</b> seluruh sektor. Proksi cabang = (realisasi ÷ target) × budget × bobot.', '',
-      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:200px">KPI</th><th class="r">Bobot</th><th class="r">Target</th><th>Satuan</th><th class="r" style="min-width:130px">Realisasi</th><th class="r">Capaian</th><th class="r" style="min-width:140px">Proksi Cabang</th></tr></thead><tbody>' +
+      '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>No</th><th style="min-width:200px">KPI</th><th class="r">Bobot</th><th class="r">Target</th><th>Satuan</th><th class="r th-short">Realisasi</th><th class="r">Capaian</th><th class="r" style="min-width:140px">Proksi Cabang</th></tr></thead><tbody>' +
       kpis.map(function (k, i) {
         var r = kpiMap[k.kpi_id + '~ALL'] || {};
         return '<tr><td class="muted">' + (i + 1) + '</td><td class="b">' + esc(k.nama_kpi) + '</td><td class="r tnum">' + fmtNum(k.bobot, 2) + '%</td><td class="r tnum b">' + (N(k.target) ? fmtNum(k.target, 2) : '<span class="text-red">belum diatur</span>') + '</td><td>' + esc(k.satuan || '') + '</td>' +
-          '<td>' + inNum('kpi', k.kpi_id + '~ALL', 'realisasi', r.realisasi, 'dec') + '</td><td class="r tnum" data-c="cap|' + k.kpi_id + '">—</td><td>' + calcCell('f2c|' + k.kpi_id) + '</td></tr>';
+          '<td class="td-short">' + inNum('kpi', k.kpi_id + '~ALL', 'realisasi', r.realisasi, 'dec') + '</td><td class="r tnum" data-c="cap|' + k.kpi_id + '">—</td><td>' + calcCell('f2c|' + k.kpi_id) + '</td></tr>';
       }).join('') + '</tbody><tfoot><tr><td colspan="7">Total proksi KPI cabang</td><td class="r" data-c="f2cTot|">—</td></tr></tfoot></table></div>', 'Langkah 1');
     // B. sektor binaan
     var chips = M.sektorAktif().map(function (s) { var on = secs.indexOf(s.sektor_id) > -1; return '<span class="chip ' + (on ? 'on' : '') + '" data-sek="' + s.sektor_id + '">' + (on ? ic('check') : ic('plus')) + esc(s.nama_sektor) + '</span>'; }).join('');
@@ -309,13 +310,13 @@ var STEP_RENDER = {
       ['margin_profit', 'dw', 'ds', 'at', 'do'].map(function (f) { return '<div class="field" style="width:120px"><label>' + (f === 'margin_profit' ? 'Margin ' + tip('margin') : f.toUpperCase() + ' ' + tip(f)) + '</label><div class="inp-wrap"><input class="inp pct" inputmode="decimal" id="bulk_' + f + '" placeholder="—"><span class="post">%</span></div></div>'; }).join('') +
       '<button class="btn" data-bulk-omset>' + ic('copy') + ' Terapkan ke semua</button></div></div>')) +
       cardSec('Kenaikan Net Profit per UMKM', 'F6 = (omset sesudah − sebelum) × margin; F7 = F6 × (1−DW)(1−DS)(1−AT)(1−DO); F8 = Σ F7 semua UMKM (R6, R7).', '',
-        '<div class="tbl-wrap" style="max-height:560px"><table class="tbl edit"><thead><tr><th style="min-width:170px">UMKM</th><th class="r" style="min-width:140px">Omset Sebelum</th><th class="r" style="min-width:140px">Omset Sesudah</th><th class="r" style="min-width:100px">Margin ' + tip('margin') + '</th><th class="r" style="min-width:130px">∆ Net Profit (F6)</th>' +
-        ['dw', 'ds', 'at', 'do'].map(function (f) { return '<th class="r" style="min-width:104px">' + f.toUpperCase() + ' ' + tip(f) + '</th>'; }).join('') + '<th class="r" style="min-width:130px">Impact (F7)</th></tr></thead><tbody>' +
+        '<div class="tbl-wrap" style="max-height:560px"><table class="tbl edit"><thead><tr><th style="min-width:170px">UMKM</th><th class="r" style="min-width:140px">Omset Sebelum</th><th class="r" style="min-width:140px">Omset Sesudah</th><th class="r th-short">Margin ' + tip('margin') + '</th><th class="r" style="min-width:130px">∆ Net Profit (F6)</th>' +
+        ['dw', 'ds', 'at', 'do'].map(function (f) { return '<th class="r th-short">' + f.toUpperCase() + ' ' + tip(f) + '</th>'; }).join('') + '<th class="r" style="min-width:130px">Impact (F7)</th></tr></thead><tbody>' +
         d.umkm.map(function (u) {
           var o = om[u.umkm_id] || {};
           return '<tr><td><b>' + esc(u.nama_umkm || '(UMKM)') + '</b><span class="sub">' + esc(M.sektorName(u.sektor_id)) + '</span></td><td>' + inNum('omset', u.umkm_id, 'omset_sebelum', o.omset_sebelum, 'money') + '</td><td>' + inNum('omset', u.umkm_id, 'omset_sesudah', o.omset_sesudah, 'money') + '</td>' +
-            '<td>' + inNum('omset', u.umkm_id, 'margin_profit', o.margin_profit, 'pct') + '</td><td>' + calcCell('f6|' + u.umkm_id) + '</td>' +
-            ['dw', 'ds', 'at', 'do'].map(function (f) { return '<td>' + inNum('omset', u.umkm_id, f, o[f], 'pct') + '</td>'; }).join('') + '<td>' + calcCell('f7|' + u.umkm_id) + '</td></tr>';
+            '<td class="td-short">' + inNum('omset', u.umkm_id, 'margin_profit', o.margin_profit, 'pct') + '</td><td>' + calcCell('f6|' + u.umkm_id) + '</td>' +
+            ['dw', 'ds', 'at', 'do'].map(function (f) { return '<td class="td-short">' + inNum('omset', u.umkm_id, f, o[f], 'pct') + '</td>'; }).join('') + '<td>' + calcCell('f7|' + u.umkm_id) + '</td></tr>';
         }).join('') + '</tbody><tfoot><tr><td colspan="9">Proksi Net Profit Total (F8)</td><td class="r" data-c="f8|">—</td></tr></tfoot></table></div>', 'F6–F8');
   },
 
@@ -352,8 +353,8 @@ var STEP_RENDER = {
         var chip = function (val, label) { var on = refs.indexOf(val) > -1; return '<span class="chip ' + (on ? 'on' : '') + '" data-ref="' + key + '|' + esc(val) + '">' + (on ? ic('check') : '') + esc(label) + '</span>'; };
         var src = '';
         if (j === 'KPI_BUDGET') src = chip('ALL', 'Semua KPI') + kpis.map(function (k) { return chip(k.kpi_id, k.nama_kpi); }).join('');
-        else if (j === 'BENCHMARK') src = chip('ALL', 'Semua benchmark') + d.benchmark.map(function (b, x) { return chip(b.bm_id, '#' + (x + 1) + ' ' + (b.nama_expert || 'Benchmark')); }).join('');
-        else if (j === 'NET_PROFIT') src = chip('ALL', 'Semua UMKM') + '<span class="small muted">Bila stakeholder punya kelompok sektor, hanya UMKM sektor itu yang dihitung.</span>';
+        else if (j === 'BENCHMARK') src = '<div class="src-grp"><span class="src-l">Benchmark</span>' + chip('ALL', 'Semua benchmark') + d.benchmark.map(function (b, x) { return chip(b.bm_id, '#' + (x + 1) + ' ' + (b.nama_expert || 'Benchmark')); }).join('') + '</div>' + sekChips(chip, refs, 'Semua sektor', 'Peserta benchmark dihitung dari kehadiran UMKM sektor terpilih (langkah 3).');
+        else if (j === 'NET_PROFIT') src = '<div class="src-grp"><span class="src-l">Sektor UMKM</span>' + chip('ALL', 'Semua sektor (' + d.umkm.length + ' UMKM)') + sekList().map(function (x) { return chip('SEK:' + x.id, x.nama + ' (' + x.n + ' UMKM)'); }).join('') + '</div><div class="src-hint">Pilih satu atau beberapa sektor — nilai Net Profit hanya dari UMKM sektor terpilih.' + (function () { var sh = d.stakeholder.filter(function (x) { return x.sh_id === o.sh_id; })[0]; return sh && sh.kelompok_sektor ? ' Stakeholder ini berkelompok sektor <b>' + esc(M.sektorName(sh.kelompok_sektor)) + '</b>, jadi hanya UMKM sektor itu yang dihitung.' : ''; })() + '</div>';
         else if (j === 'MANFAAT_SH') src = d.manfaat.length ? d.manfaat.map(function (m, x) { return chip(m.mf_id, '#' + (x + 1) + ' ' + (m.parameter || 'Manfaat')); }).join('') : '<span class="small muted">Tabel manfaat stakeholder (langkah 6) masih kosong.</span>';
         else if (j === 'MANUAL') src = '<span class="small muted">Isi nilai proksi dan catatan sumbernya.</span>';
         else src = '<span class="small muted">Pilih jenis proksi terlebih dahulu.</span>';
@@ -609,8 +610,18 @@ async function onWzClick(e) {
   if (ds.ref) {
     var pr = ds.ref.split('|'), o = findRow('pk', pr[0]), val = pr[1];
     var refs = String(o.ref || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-    if (val === 'ALL') refs = refs.indexOf('ALL') > -1 ? [] : ['ALL'];
-    else { refs = refs.filter(function (x) { return x !== 'ALL'; }); var ix = refs.indexOf(val); if (ix > -1) refs.splice(ix, 1); else refs.push(val); }
+    var isSek = function (x) { return x.indexOf('SEK:') === 0; }, sekR = refs.filter(isSek), idR = refs.filter(function (x) { return !isSek(x); });
+    if (o.jenis === 'NET_PROFIT') {   // "Semua sektor" ↔ sektor tertentu saling meniadakan
+      if (val === 'ALL') refs = ['ALL'];
+      else { var ixs = sekR.indexOf(val); if (ixs > -1) sekR.splice(ixs, 1); else sekR.push(val); refs = sekR.length ? sekR : ['ALL']; }
+    } else if (isSek(val)) {   // filter sektor (benchmark) — tidak mengubah pilihan benchmark
+      if (val === 'SEK:ALL') sekR = []; else { var ix2 = sekR.indexOf(val); if (ix2 > -1) sekR.splice(ix2, 1); else sekR.push(val); }
+      refs = idR.concat(sekR);
+    } else {
+      if (val === 'ALL') idR = idR.indexOf('ALL') > -1 ? [] : ['ALL'];
+      else { idR = idR.filter(function (x) { return x !== 'ALL'; }); var ix = idR.indexOf(val); if (ix > -1) idR.splice(ix, 1); else idR.push(val); }
+      refs = idR.concat(sekR);
+    }
     o.ref = refs.join(','); markDirty('outcome'); return rerender();
   }
   if (ds.addpk) { var oa = findRow('outcome', ds.addpk); pkList(oa).push(newPk()); markDirty('outcome'); return rerender(); }
@@ -898,3 +909,27 @@ async function relock(btn) {
     toast(ids.length ? 'Dikunci kembali — ' + ids.length + ' catatan sementara dihapus.' : 'Dikunci kembali — tidak ada perubahan.', 'ok');
   });
 }
+
+/** Sektor yang ada di daftar UMKM (langkah 3) beserta jumlah UMKM-nya. */
+function sekList() {
+  var m = {}, order = (App.master.sektor || []).map(function (x) { return x.sektor_id; });
+  (W.data.umkm || []).forEach(function (u) { var k = u.sektor_id || ''; if (!k) return; m[k] = (m[k] || 0) + 1; });
+  return Object.keys(m).sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }).map(function (k) { return { id: k, nama: M.sektorName(k), n: m[k] }; });
+}
+/** Chip filter sektor untuk proksi Benchmark. */
+function sekChips(chip, refs, allLbl, hint) {
+  var sl = sekList(); if (!sl.length) return '<div class="src-hint">Belum ada UMKM bersektor di langkah 3 — benchmark dihitung untuk semua peserta.</div>';
+  var anySek = refs.some(function (x) { return x.indexOf('SEK:') === 0; });
+  var allChip = '<span class="chip ' + (!anySek ? 'on' : '') + '" data-ref="' + chip('', '').match(/data-ref="([^|]*)\|/)[1] + '|SEK:ALL">' + (!anySek ? ic('check') : '') + esc(allLbl) + '</span>';
+  return '<div class="src-grp"><span class="src-l">Sektor UMKM</span>' + allChip + sl.map(function (x) { return chip('SEK:' + x.id, x.nama + ' (' + x.n + ' UMKM)'); }).join('') + '</div><div class="src-hint">' + hint + '</div>';
+}
+
+/** Kolom tulisan memanjang ke bawah mengikuti isi (tinggi awal tetap seperti semula). */
+function autoGrow(ta) {
+  if (!ta || ta.tagName !== 'TEXTAREA') return;
+  if (!ta._minH) ta._minH = ta.offsetHeight || 0;
+  ta.style.height = 'auto';
+  var h = Math.max(ta._minH, ta.scrollHeight + 2);
+  ta.style.height = h + 'px';
+}
+document.addEventListener('input', function (e) { if (e.target && e.target.tagName === 'TEXTAREA' && e.target.closest('#wzMain, .notes-card, .modal')) autoGrow(e.target); });

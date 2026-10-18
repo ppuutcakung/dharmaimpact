@@ -12,7 +12,7 @@
 var SroiEngine = (function () {
   'use strict';
 
-  var VERSION = '1.3.0';
+  var VERSION = '1.4.0';
 
   /* ---------- util angka (data tersimpan: Number atau string "1234.5") ---------- */
   function n(v) {
@@ -25,6 +25,8 @@ var SroiEngine = (function () {
   function isBlank(v) { return v === null || v === undefined || String(v).trim() === ''; }
   function adj(o) { return (1 - pct(o.dw)) * (1 - pct(o.ds)) * (1 - pct(o.at)) * (1 - pct(o['do'])); }
   function arr(a) { return Array.isArray(a) ? a : []; }
+  /** Pisahkan referensi sumber: id biasa vs filter sektor "SEK:<sektor_id>". */
+  function splitRefs(refs) { var sek = [], ids = []; refs.forEach(function (x) { if (String(x).indexOf('SEK:') === 0) { var v = String(x).slice(4); if (v && v !== 'ALL') sek.push(v); } else ids.push(x); }); return { sek: sek, ids: ids.length ? ids : ['ALL'] }; }
   function refList(ref) {
     var s = String(ref == null ? '' : ref).trim();
     if (!s || s === 'ALL' || s === '*') return ['ALL'];
@@ -87,6 +89,8 @@ var SroiEngine = (function () {
     var errors = [], warnings = [];
     var umkmById = {}; umkm.forEach(function (u) { umkmById[u.umkm_id] = u; });
     var shById = {}; sh.forEach(function (s) { shById[s.sh_id] = s; });
+    var sekById = {}; arr(ctx.sektor).forEach(function (x) { sekById[x.sektor_id] = x.nama_sektor; });
+    function sekName(id) { return id === '_' ? 'Tanpa sektor' : (sekById[id] || id); }
 
     /* ---------- C2: KPI cabang → breakdown per sektor → sektor dihitung (F1–F3, F17) ----------
      * Baris KPI_SEKTOR dengan sektor_id 'ALL' = realisasi akumulasi cabang (semua sektor).
@@ -194,7 +198,11 @@ var SroiEngine = (function () {
     bm.forEach(function (b) {
       var peserta = b.kegiatan_id && kegStat[b.kegiatan_id] ? kegStat[b.kegiatan_id].peserta : n(b.jumlah_peserta);
       var v = (n(b.biaya_expert_per_peserta) - n(b.biaya_internal_per_peserta)) * peserta;            // F5
-      bmHasil[b.bm_id] = { peserta: peserta, nilai: v }; f5 += v;
+      // pemilahan per sektor UMKM: peserta dibagi menurut proporsi kehadiran UMKM tiap sektor pada kegiatan tsb.
+      var sek = null, hTot = 0, hSek = {};
+      if (b.kegiatan_id) hadir.forEach(function (h) { var u = umkmById[h.umkm_id], j = n(h.jumlah); if (h.kegiatan_id !== b.kegiatan_id || !u || j <= 0) return; var sid = u.sektor_id || '_'; hSek[sid] = (hSek[sid] || 0) + j; hTot += j; });
+      if (hTot > 0) { sek = {}; Object.keys(hSek).forEach(function (sid) { var ps = peserta * hSek[sid] / hTot; sek[sid] = { peserta: ps, nilai: (n(b.biaya_expert_per_peserta) - n(b.biaya_internal_per_peserta)) * ps }; }); }
+      bmHasil[b.bm_id] = { peserta: peserta, nilai: v, sektor: sek }; f5 += v;
     });
     var mfHasil = {};
     mf.forEach(function (m) {
@@ -234,14 +242,26 @@ var SroiEngine = (function () {
           });
           if (!kpis.length) errors.push({ step: 7, msg: cl + ': pilih minimal satu KPI sebagai sumber proksi.' });
         } else if (jenis === 'BENCHMARK') {
-          var bms = refs[0] === 'ALL' ? bm.map(function (b) { return b.bm_id; }) : refs;
-          bms.forEach(function (id) { if (!bmHasil[id]) return; nilai += bmHasil[id].nilai; use('BM:' + id, 'Benchmark ' + (bm.filter(function (b) { return b.bm_id === id; })[0].nama_expert || ''), 'BENCHMARK', porsi, o.outcome_id); });
+          var rb = splitRefs(refs), bms = rb.ids.indexOf('ALL') > -1 ? bm.map(function (b) { return b.bm_id; }) : rb.ids;
+          bms.forEach(function (id) {
+            var h = bmHasil[id]; if (!h) return;
+            var bl = 'Benchmark ' + (bm.filter(function (b) { return b.bm_id === id; })[0].nama_expert || '');
+            if (h.sektor) {   // selalu dicatat per sektor agar pemakaian sumber tidak terhitung dobel antar outcome
+              Object.keys(h.sektor).forEach(function (sid) {
+                if (rb.sek.length && rb.sek.indexOf(sid) < 0) return;
+                nilai += h.sektor[sid].nilai; use('BM:' + id + ':' + sid, bl + ' — ' + sekName(sid), 'BENCHMARK', porsi, o.outcome_id);
+              });
+            } else if (rb.sek.length) {
+              warnings.push({ step: 7, msg: cl + ': ' + bl + ' belum punya data kehadiran UMKM, sehingga tidak bisa dipilah per sektor (nilai 0).' });
+            } else { nilai += h.nilai; use('BM:' + id, bl, 'BENCHMARK', porsi, o.outcome_id); }
+          });
           if (!bm.length) errors.push({ step: 7, msg: cl + ': tabel benchmark (langkah 6) masih kosong.' });
         } else if (jenis === 'NET_PROFIT') {
-          var us = refs[0] === 'ALL' ? umkm.map(function (u) { return u.umkm_id; }) : refs;
+          var rn = splitRefs(refs), us = rn.ids.indexOf('ALL') > -1 ? umkm.map(function (u) { return u.umkm_id; }) : rn.ids;
           us.forEach(function (id) {
             var u = umkmById[id]; if (!u) return;
             if (sektorFilter && u.sektor_id !== sektorFilter) return;
+            if (rn.sek.length && rn.sek.indexOf(u.sektor_id) < 0) return;   // filter sektor pilihan PIC
             nilai += omsetHasil[id] ? omsetHasil[id].f7 : 0;
             use('NP:' + id, 'Net profit ' + (u.nama_umkm || ''), 'NET_PROFIT', porsi, o.outcome_id);
           });

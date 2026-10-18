@@ -7,7 +7,7 @@ var LIB = {
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  xstd: 'js/xlsx-std.js?v=1'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
+  xstd: 'js/xlsx-std.js?v=2'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
 };
 async function loadXStd() { await loadScript(LIB.jszip); await loadScript(LIB.xstd); return window.XLap; }
 /** Konteks hitung: proyek Disetujui memakai snapshot parameter saat persetujuan (B4) */

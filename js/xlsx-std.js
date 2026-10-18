@@ -428,7 +428,7 @@
         d.outcome.map(function (o, i) {
           var h = r.outcome[o.outcome_id] || {};
           return [i + 1, shName(o.sh_id), o.input_ref || '-', o.output_ringkas || '-', o.deskripsi_outcome || '-', o.indikator_sebelum || '-', o.indikator_sesudah || '-', o.sumber_informasi || '-', N(o.durasi_tahun) || 1, N(o.mulai) === 2 ? 'Setelah aktivitas' : 'Saat aktivitas',
-            env.pkText(h), (h.komponen || []).map(function (c) { return c.ref; }).filter(Boolean).join(' | ') || '-', env.pkPorsi(h), Math.round(h.nilai_porsi || 0), (h.komponen || []).map(function (c) { return c.notes; }).filter(Boolean).concat(o.proxy_notes ? [o.proxy_notes] : []).join(' | ') || '-',
+            env.pkText(h), (h.komponen || []).map(function (c) { return String(c.ref || '').split(',').map(function (x) { x = x.trim(); return x === 'ALL' ? 'Semua' : x.indexOf('SEK:') === 0 ? 'Sektor ' + M.sektorName(x.slice(4)) : x; }).join(', '); }).filter(Boolean).join(' | ') || '-', env.pkPorsi(h), Math.round(h.nilai_porsi || 0), (h.komponen || []).map(function (c) { return c.notes; }).filter(Boolean).concat(o.proxy_notes ? [o.proxy_notes] : []).join(' | ') || '-',
             env.pkF(h, 'dw'), env.pkF(h, 'ds'), env.pkF(h, 'at'), env.pkF(h, 'do'), Math.round(h.impact || 0), Math.round(h.pv || 0)];
         }), ['tdc', 'td', 'td', 'td', 'td', 'td', 'td', 'td', 'tdc', 'td', 'td', 'td', 'tdcw', 'rp', 'td', 'tdcw', 'tdcw', 'tdcw', 'tdcw', 'rp', 'rp'], { headH: 34 });
       autoRows(s3, r0, y, 0, 21);
