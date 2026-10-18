@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DharmaImpact — SROI Management</title>
+  <meta name="description" content="Aplikasi perhitungan & pelaporan SROI program pembinaan UMKM">
+  <meta name="theme-color" content="#0A3D73">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23005AAB'/%3E%3Cpath d='M8 22V10h6a6 6 0 010 12H8zm4-3h2a3 3 0 000-6h-2z' fill='%23fff'/%3E%3Ccircle cx='23' cy='11' r='2.5' fill='%23E8A317'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Layar awal (hanya tampil < 1 detik bila sesi tersimpan) -->
+  <div id="boot"><div class="boot-logo"><div class="spinner"></div> DharmaImpact</div></div>
+
+  <!-- ================= LOGIN ================= -->
+  <section id="login" hidden>
+    <div class="login-art">
+      <div class="brand"><div class="brand-mark" data-icon="logo"></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
+      <div>
+        <h1>Satu mesin hitung SROI untuk seluruh cabang binaan.</h1>
+        <p>Isi data program, lihat rasio Social Return on Investment langsung saat mengetik, kirim ke pusat, dan cetak laporan siap arsip — tanpa rumus manual.</p>
+      </div>
+      <div class="stat-row">
+        <div><b>8</b><span>Langkah terpandu</span></div>
+        <div><b>17</b><span>Rumus terkunci</span></div>
+        <div><b>&lt;1 dtk</b><span>Hasil real-time</span></div>
+      </div>
+      <div class="rings"></div>
+    </div>
+    <div class="login-form-wrap">
+      <form class="login-card" id="loginForm" autocomplete="on">
+        <h2>Masuk</h2>
+        <p class="sub">Gunakan akun yang diberikan Super Admin.</p>
+        <div class="field mb-s"><label for="lgUser">Username</label><input class="inp" id="lgUser" name="username" autocomplete="username" required autocapitalize="none" spellcheck="false"></div>
+        <div class="field mb"><label for="lgPass">Password</label><input class="inp" id="lgPass" name="password" type="password" autocomplete="current-password" required></div>
+        <div id="lgErr" class="banner banner-red" hidden></div>
+        <button class="btn btn-primary" id="lgBtn" style="width:100%;justify-content:center" type="submit">Masuk</button>
+        <p class="small muted mt">Lupa password? Hubungi Super Admin kantor pusat untuk reset.</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ================= APLIKASI ================= -->
+  <div id="shell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark" data-icon="logo"></div><div><b>DharmaImpact</b><small>SROI Management</small></div></div>
+      <div class="cta" id="ctaWrap"><button class="btn btn-cta" id="btnHitungBaru"><span data-icon="plus-circle"></span> Hitung Baru</button></div>
+      <nav class="nav" id="nav"></nav>
+      <div class="side-foot">
+        <div class="side-user"><div class="avatar" id="sideAvatar">—</div><div><b id="sideName">—</b><small id="sideRole">—</small></div></div>
+        <div class="side-links"><a href="#/profil"><span data-icon="settings"></span> Profil</a><a href="#" class="logout" id="btnLogout"><span data-icon="log-out"></span> Keluar</a></div>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+    <div class="main">
+      <header class="topbar">
+        <button class="btn btn-icon btn-ghost burger" id="btnBurger" aria-label="Menu"><span data-icon="menu"></span></button>
+        <div class="grow" style="min-width:0">
+          <div class="crumb" id="crumb">DharmaImpact</div>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+        </div>
+        <div class="top-right">
+          <span class="chip-role" id="chipRole"></span>
+          <span class="net-dot" id="netDot" title="Status koneksi server"></span>
+          <div class="top-user"><div class="tu-txt"><b id="topName">—</b><small id="topSub">—</small></div><div class="avatar" id="topAvatar">—</div></div>
+        </div>
+      </header>
+      <main id="pages"></main>
+      <footer class="app-foot"><span><b>DharmaImpact</b> • Sistem Pengukuran Dampak Sosial Program Pembinaan UMKM</span><span>Mesin hitung SroiEngine v<span id="engVer"></span> • Rumus klasik R1–R8</span></footer>
+    </div>
+    <nav class="bottomnav" id="bottomnav"></nav>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script src="js/config.js" defer></script>
+  <script src="js/icons.js" defer></script>
+  <script src="js/sroi-engine.js" defer></script>
+  <script src="js/core.js" defer></script>
+  <script src="js/charts.js" defer></script>
+  <script src="js/page-dashboard.js" defer></script>
+  <script src="js/page-proyek.js" defer></script>
+  <script src="js/page-wizard.js" defer></script>
+  <script src="js/page-admin.js" defer></script>
+  <script src="js/export.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
