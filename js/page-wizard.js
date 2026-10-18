@@ -409,7 +409,7 @@ var STEP_RENDER = {
     var berkas = d.berkas || [];
     return '<div class="grid g-4 kpis" style="gap:14px">' +
       '<div class="card kpi hl"><div class="lbl">Rasio SROI (' + esc(r.params.rumus) + ')</div><div class="val big">' + ratioFmt(r.rasio) + '</div><div class="foot"><span>Klasik ' + fmtNum(r.rasioKlasik, 2) + '</span><span>Bersih ' + fmtNum(r.rasioBersih, 2) + '</span></div></div>' +
-      '<div class="card kpi"><div class="lbl">Kategori</div><div style="margin-top:10px">' + starsHtml(r.bintang) + '</div><div class="foot"><span class="b" style="color:var(--text)">' + esc(r.bintangLabel) + '</span><span class="badge badge-info">Bintang ' + r.bintang + '</span></div></div>' +
+      '<div class="card kpi"><div class="lbl">Kategori</div><div style="margin-top:10px">' + starsHtml(r.bintang, 'lg') + '</div><div class="foot"><span class="b" style="color:var(--text)">' + esc(r.bintangLabel) + '</span><span class="badge badge-info">Bintang ' + r.bintang + '</span></div></div>' +
       '<div class="card kpi"><div class="lbl">Investasi</div><div class="val" title="' + rp(r.pvInvestasi) + '">' + rp(r.pvInvestasi) + '</div><div class="foot"><span>PV</span><span>Nominal ' + rp(r.totalInvestasi) + '</span></div></div>' +
       '<div class="card kpi"><div class="lbl">Impact</div><div class="val green">' + rp(r.pvImpact) + '</div><div class="foot"><span>PV</span><span>Nominal ' + rp(r.totalImpact) + '</span></div></div></div>' +
       '<div class="grid g-21 mt"><div>' +
@@ -472,17 +472,40 @@ function updateCalc() {
   var main = $('#wzMain'); if (!main) return;
   $$('[data-c]', main).forEach(function (el) {
     var p = el.dataset.c.split('|'), t = p[0], k = p.slice(1).join('|');
-    if (t === 'usage') { el.innerHTML = usageHtml(); return; }
+    if (t === 'usage') { el.innerHTML = usageHtml(el); return; }
     el.textContent = calcText(t, k);
     if (t === 'chk') el.style.color = /⚠/.test(el.textContent) ? 'var(--red-solid)' : '#15803D';
   });
   $$('input[data-b$="|jumlah_peserta"]', main).forEach(function (el) { var id = el.dataset.b.split('|')[1]; el.placeholder = String((W.res.kegiatanStat[id] || {}).hadir || 0); });
   updatePanel();
 }
-function usageHtml() {
+/** Pemakaian sumber proksi: kartu ringkas, maks. 5 baris per halaman; sumber yang terhitung dobel (merah) selalu di depan. */
+var USAGE_ROWS = 5, USAGE_MINW = 200, USAGE_GAP = 8;
+function usageCols(el) { var w = (el && el.clientWidth) || 900; return Math.max(1, Math.floor((w + USAGE_GAP) / (USAGE_MINW + USAGE_GAP))); }
+function usageHtml(el) {
   var u = W.res.usage, keys = Object.keys(u);
+  if (el && !el._ro && window.ResizeObserver) { el._uw = el.clientWidth; el._ro = new ResizeObserver(debounce(function () { if (el.isConnected && el.clientWidth !== el._uw) { el._uw = el.clientWidth; el.innerHTML = usageHtml(el); } }, 80)); el._ro.observe(el); }
   if (!keys.length) return '<div class="muted small">Belum ada sumber proksi yang dipakai.</div>';
-  return '<div class="usage">' + keys.map(function (k) { var x = u[k], over = x.porsi > 100.0001; return '<div class="u' + (over ? ' over' : '') + '"><div class="row between"><b style="font-size:12.5px">' + esc(x.label) + '</b><span class="' + (over ? 'text-red' : 'text-green') + ' b">' + fmtNum(x.porsi, 1) + '%</span></div><div class="tiny muted">' + esc(x.group.replace('_', ' ')) + '</div><div class="bar"><i style="width:' + Math.min(100, x.porsi) + '%"></i></div></div>'; }).join('') + '</div>';
+  var list = keys.map(function (k, i) { var x = u[k]; return { k: k, x: x, i: i, over: x.porsi > 100.0001 }; });
+  list.sort(function (a, b) { return (b.over - a.over) || (a.over ? b.x.porsi - a.x.porsi : a.i - b.i); });
+  var nOver = list.filter(function (o) { return o.over; }).length, cols = usageCols(el), per = cols * USAGE_ROWS, pages = Math.max(1, Math.ceil(list.length / per));
+  var pg = Math.min(Math.max(1, W.usagePage || 1), pages); W.usagePage = pg;
+  var items = list.slice((pg - 1) * per, pg * per);
+  var head = '<div class="usage-head"><span><b>' + list.length + '</b> sumber proksi dipakai</span>' +
+    (nOver ? '<span class="text-red b">' + ic('alert') + ' ' + nOver + ' terhitung dobel — ditampilkan paling depan</span>' : '<span class="text-green b">' + ic('check-circle') + ' Semua sumber ≤ 100%</span>') + '</div>';
+  var grid = '<div class="usage" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">' + items.map(function (o) {
+    var x = o.x;
+    return '<div class="u' + (o.over ? ' over' : '') + '" title="' + esc(x.label) + ' — ' + fmtNum(x.porsi, 1) + '%"><div class="u1"><b>' + esc(String(x.label).replace(/^net profit\s+/i, '')) + '</b><span class="' + (o.over ? 'text-red' : 'text-green') + '">' + fmtNum(x.porsi, 1) + '%</span></div><div class="u2"><small>' + esc(String(x.group).replace(/_/g, ' ')) + '</small><div class="bar"><i style="width:' + Math.min(100, x.porsi) + '%"></i></div></div></div>';
+  }).join('') + '</div>';
+  var pager = '';
+  if (pages > 1) {
+    var btn = function (n, lbl, dis, on) { return '<button class="pg' + (on ? ' on' : '') + '" data-upage="' + n + '"' + (dis ? ' disabled' : '') + '>' + lbl + '</button>'; };
+    var nums = [], add = function (n) { if (nums.indexOf(n) < 0 && n >= 1 && n <= pages) nums.push(n); };
+    add(1); for (var i = pg - 1; i <= pg + 1; i++) add(i); add(pages); nums.sort(function (a, b) { return a - b; });
+    var parts = [], prev = 0; nums.forEach(function (n) { if (n - prev > 1) parts.push('<span class="pg-gap">…</span>'); parts.push(btn(n, n, false, n === pg)); prev = n; });
+    pager = '<div class="usage-pager"><span class="tiny muted">Menampilkan ' + ((pg - 1) * per + 1) + '–' + Math.min(pg * per, list.length) + ' dari ' + list.length + '</span><div class="row" style="gap:4px">' + btn(pg - 1, '‹', pg === 1) + parts.join('') + btn(pg + 1, '›', pg === pages) + '</div></div>';
+  }
+  return head + grid + pager;
 }
 function updatePanel() {
   var r = W.res, pn = $('#panel'), pm = $('#panelM'); if (!pn) return;
@@ -568,6 +591,7 @@ async function onWzClick(e) {
   if (ds.relock !== undefined) return relock(t);
   if (ds.delberkas) return deleteBerkas(ds.delberkas, t);
   if (ds.note) return noteAction(ds.note, ds.id, t);
+  if (ds.upage) { W.usagePage = +ds.upage; var ue = $('[data-c="usage|"]'); if (ue) ue.innerHTML = usageHtml(ue); return; }
   if (W.ro) return;
   if (ds.sek) {
     var sid = ds.sek, i = W.sektors.indexOf(sid);
