@@ -7,7 +7,7 @@ var LIB = {
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   autotable: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  xstd: 'js/xlsx-std.js?v=5'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
+  xstd: 'js/xlsx-std.js?v=6'   // penulis Excel bergaya (kop, garis, format Rupiah, grafik)
 };
 async function loadXStd() { await loadScript(LIB.jszip); await loadScript(LIB.xstd); return window.XLap; }
 /** Konteks hitung: proyek Disetujui memakai snapshot parameter saat persetujuan (B4) */
@@ -258,8 +258,14 @@ var Exporter = {
       var LG = 24, tx = lgImg ? 14 + LG + 6 : 14, tw = Math.min(W - 14 - tx, 132);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5);
       var jl = doc.splitTextToSize((P.judul || ('Laporan Konsolidasi SROI Tahun ' + th)).toUpperCase(), tw).slice(0, 3);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8);
-      var sub = doc.splitTextToSize((P.penyelenggara || CFG.ORG_NAME || 'DharmaImpact') + '  |  Tahun ' + th + '  |  Doc. No: ' + (P.doc_number || '-') + '  |  Rev. ' + (P.rev || '0') + '  |  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), W - 14 - tx).slice(0, 2);
+      // sub-judul: SATU baris, selebar judul — ukuran huruf mengecil otomatis bila panjang
+      doc.setFont('helvetica', 'normal');
+      var parts = [P.penyelenggara || CFG.ORG_NAME || 'DharmaImpact', 'Tahun ' + th, 'Doc. No: ' + (P.doc_number || '-'), 'Rev. ' + (P.rev || '0'), 'Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID'))];
+      var subTxt = parts.join('  |  '), subFs = 8.8;
+      doc.setFontSize(subFs);
+      while (doc.getTextWidth(subTxt) > tw && subFs > 6.2) { subFs -= 0.2; doc.setFontSize(subFs); }
+      if (doc.getTextWidth(subTxt) > tw) { subTxt = parts.join(' | '); while (doc.getTextWidth(subTxt) > tw && subFs > 5.4) { subFs -= 0.2; doc.setFontSize(subFs); } }
+      var sub = [subTxt];
       var block = 3.6 + (jl.length - 1) * 6.2 + 7 + (sub.length - 1) * 4.4 + 1;   // tinggi isi kop (mm)
       var kopH = Math.max(lgImg ? LG + 12 : 26, block + 16);
       doc.setFillColor.apply(doc, hexRgb(UI.color_sidebar) || [10, 61, 115]); doc.rect(0, 0, W, kopH, 'F');
@@ -272,7 +278,7 @@ var Exporter = {
       var ty = (kopH - block) / 2 + 3.6;   // judul & sub-judul di tengah kop secara vertikal
       doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13.5); doc.text(jl, tx, ty, { lineHeightFactor: 1.3 });
       ty += (jl.length - 1) * 6.2 + 7;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.8); doc.setTextColor(226, 232, 240); doc.text(sub, tx, ty, { lineHeightFactor: 1.4 });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(subFs); doc.setTextColor(226, 232, 240); doc.text(subTxt, tx, ty);
       var y = kopH + 8;
       if (!final) {
         doc.setFillColor(254, 226, 226); doc.rect(0, kopH, W, 9, 'F'); doc.setFillColor(220, 38, 38); doc.rect(0, kopH, 3, 9, 'F');

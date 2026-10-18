@@ -606,7 +606,9 @@
         sh.cols([8], 0);
       } else { sh.height(0, Math.max(34, 22 * Math.ceil(judul.length / 62) + 10)); sh.merge(0, 0, 0, nC - 1, judul, tStyle); }
       sh.height(1, 18).height(2, 20);
-      sh.merge(1, 0, 1, nC - 1, (P.penyelenggara || env.org || 'DharmaImpact') + '  •  Tahun ' + th + '  •  Doc. No: ' + (P.doc_number || '-') + '  •  Rev. ' + (P.rev || '0') + '  •  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID')), st.sub);
+      var subTxt = (P.penyelenggara || env.org || 'DharmaImpact') + '  •  Tahun ' + th + '  •  Doc. No: ' + (P.doc_number || '-') + '  •  Rev. ' + (P.rev || '0') + '  •  Tanggal: ' + (P.tgl || new Date().toLocaleDateString('id-ID'));
+      var subSt = Object.assign({}, st.sub, { font: { sz: subTxt.length > 95 ? 8 : 9, color: 'E2E8F0' } });   // satu baris, sejajar judul
+      if (lg) { sh.set(1, 0, null, st.band); sh.merge(1, 1, 1, nC - 1, subTxt, subSt); } else sh.merge(1, 0, 1, nC - 1, subTxt, subSt);
       sh.merge(2, 0, 2, nC - 1, final ? '✔ Seluruh ' + all + ' cabang sudah disetujui' : '⚠ ' + done + ' dari ' + all + ' cabang sudah disetujui — laporan bersifat sementara', final ? st.final : st.draft);
       var y = 4;
       y = X.section(sh, st, y, nC, 'A. DATA PROGRAM');
