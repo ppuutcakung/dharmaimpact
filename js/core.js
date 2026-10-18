@@ -314,13 +314,13 @@ function buildNav() {
   var items = NAV[App.me.role];
   $('#nav').innerHTML = items.map(function (it) {
     if (typeof it === 'string') return '<div class="nav-sep">' + esc(it.slice(1)) + '</div>';
-    return '<a href="#/' + it[0] + '" data-page="' + it[0] + '" data-alt="' + (it[3] || '') + '">' + ic(it[2]) + '<span>' + esc(it[1]) + '</span>' + (it[0] === 'persetujuan' ? '<span class="badge-n" id="navBadge" hidden>0</span>' : '') + '</a>';
+    return '<a href="#/' + it[0] + '" data-page="' + it[0] + '" data-alt="' + (it[3] || '') + '">' + ic(it[2]) + '<span>' + esc(it[1]) + '</span>' + (it[0] === 'persetujuan' ? '<span class="badge-n" id="navBadge" hidden>0</span>' : '') + (it[0] === 'proyek' && App.me.role === 'CABANG' ? '<span class="badge-n" id="navNote" hidden title="Catatan dari pusat">0</span>' : '') + '</a>';
   }).join('');
   var bn = items.filter(function (x) { return typeof x !== 'string'; }).slice(0, 4);
   $('#bottomnav').innerHTML = bn.map(function (it) { return '<a href="#/' + it[0] + '" data-page="' + it[0] + '" data-alt="' + (it[3] || '') + '">' + ic(it[2]) + '<span>' + esc(it[1].split(' ')[0] === 'Dashboard' ? 'Dashboard' : it[1].split(' ')[0]) + '</span></a>'; }).join('') +
     '<a href="#" id="bnMore">' + ic('menu') + '<span>Menu</span></a>';
   $('#bnMore').onclick = function (e) { e.preventDefault(); document.body.classList.add('nav-open'); };
-  $('#ctaWrap').hidden = App.me.role === 'STAKEHOLDER';
+  $('#ctaWrap').hidden = App.me.role !== 'CABANG';   // hanya cabang yang membuat perhitungan
   var me = App.me;
   $('#sideName').textContent = me.nama; $('#sideRole').textContent = roleLabel(me.role) + (me.cabangId ? ' • ' + M.cabangName(me.cabangId) : '');
   $('#topName').textContent = me.nama; $('#topSub').textContent = me.role === 'CABANG' ? 'Cabang ' + M.cabangName(me.cabangId) : roleLabel(me.role);
@@ -329,9 +329,10 @@ function buildNav() {
   updateNavBadges();
 }
 function updateNavBadges() {
-  var b = $('#navBadge'); if (!b) return;
-  var n = (App.proyek || []).filter(function (p) { return p.status === 'Dikirim'; }).length;
-  b.textContent = n; b.hidden = !n;
+  var b = $('#navBadge');
+  if (b) { var n = (App.proyek || []).filter(function (p) { return p.status === 'Dikirim'; }).length; b.textContent = n; b.hidden = !n; }
+  var c = $('#navNote');
+  if (c) { var m = (App.proyek || []).reduce(function (a, p) { return a + (Number(p.catatan_terbuka) || 0); }, 0); c.textContent = m; c.hidden = !m; }
 }
 
 /* =====================================================================

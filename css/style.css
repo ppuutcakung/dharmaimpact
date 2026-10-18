@@ -339,6 +339,22 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .file-ic { width: 36px; height: 36px; border-radius: 8px; background: var(--primary-tint); color: var(--primary); display: grid; place-items: center; flex: none; }
 .dropzone { border: 1.5px dashed var(--border-strong); border-radius: var(--r-md); padding: 18px; text-align: center; color: var(--muted); background: #FAFCFF; }
 
+/* catatan admin */
+.notes-card { border-color: var(--primary-line); }
+.notes-card.notes-cabang { border-color: #F6D88A; background: #FFFDF5; }
+.notes-card + .card { margin-top: 18px; }
+.note { border: 1px solid var(--border); border-left: 4px solid var(--amber); border-radius: 8px; padding: 10px 12px; background: #fff; margin-bottom: 10px; }
+.note.done { border-left-color: #16A34A; opacity: .85; }
+.note-isi { margin-top: 8px; font-size: 13.5px; line-height: 20px; overflow-wrap: anywhere; }
+.note-resp { display: flex; gap: 8px; margin-top: 8px; padding: 8px 10px; background: #F0FDF4; border-radius: 6px; font-size: 12.5px; color: #14532D; }
+.note-resp svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 2px; }
+.note-new { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.note .row.between { flex-wrap: wrap; }
+.note .row.mt-s { gap: 8px; flex-wrap: wrap; }
+.note .row.mt-s .inp { flex: 1 1 220px; }
+.stepper button { position: relative; }
+.stepper button .nb { position: absolute; top: 2px; right: 2px; background: var(--amber); color: #3A2600; font-size: 10px; min-width: 16px; height: 16px; line-height: 16px; border-radius: 8px; text-align: center; padding: 0 4px; font-weight: 700; }
+
 /* mode baca */
 .wz-ro .ed, .wz-ro .ro-hide { display: none !important; }
 .wz-ro .chip { cursor: default; }

@@ -75,7 +75,7 @@ function hasDirty() { return W.infoDirty || Object.keys(W.dirty).length > 0; }
 /** Normalisasi data setelah dimuat */
 function prepData() {
   var d = W.data, p = d.proyek, me = App.me, st = p.status, editable = st === 'Draft' || st === 'Perlu Revisi';
-  W.ro = me.role === 'STAKEHOLDER' || !editable;
+  W.ro = me.role !== 'CABANG' || !editable;   // input/ubah/hapus data hanya hak cabang; admin & stakeholder mode baca
   ['stakeholder', 'kpi', 'kegiatan', 'umkm', 'kehadiran', 'biaya', 'omset', 'benchmark', 'manfaat', 'outcome', 'berkas'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
   W.ctx = ctxForProyek(p);
   var kpis = kpiList().map(function (k) { return k.kpi_id; });
@@ -134,7 +134,8 @@ function renderWizard() {
   $('#wzWrap', W.el).innerHTML =
     '<div class="wz-head"><button class="btn btn-icon btn-sm" data-back title="Kembali">' + ic('chevron-left') + '</button><div class="grow" style="min-width:0"><h2>' + esc(p.nama_program || 'Perhitungan SROI') + '</h2><div class="small muted">Cabang ' + esc(M.cabangName(p.cabang_id)) + ' • Tahun ' + p.tahun + ' • Budget ' + rp(W.ctx.budget) + ' • UMK ' + rp(W.ctx.umk) + '</div></div>' +
     '<span class="save-ind" id="saveInd"></span>' + (!W.ro ? '<button class="btn btn-sm" data-save>' + ic('save') + ' Simpan</button>' : '') + '</div>' + banner +
-    '<div class="stepper" id="stepper">' + STEPS.map(function (s) { return '<button data-step="' + s.n + '" class="' + (s.n === W.step ? 'on' : '') + (errSteps[s.n] ? ' err' : '') + '" title="' + esc(s.s) + '"><i>' + s.n + '</i><span>' + esc(s.t) + '</span></button>'; }).join('') + '</div>' +
+    notesBanner() +
+    '<div class="stepper" id="stepper">' + STEPS.map(function (s) { var nc = openNotes(s.n).length; return '<button data-step="' + s.n + '" class="' + (s.n === W.step ? 'on' : '') + (errSteps[s.n] ? ' err' : '') + '" title="' + esc(s.s) + '"><i>' + s.n + '</i><span>' + esc(s.t) + '</span>' + (nc ? '<b class="nb" title="' + nc + ' catatan admin terbuka">' + nc + '</b>' : '') + '</button>'; }).join('') + '</div>' +
     '<div class="wz-body"><div class="wz-main' + (W.ro ? ' wz-ro' : '') + '" id="wzMain"></div><aside class="panel" id="panel"></aside></div>' +
     '<div class="panel-mobile" id="panelM"></div>';
   renderStep();
@@ -143,7 +144,7 @@ function renderWizard() {
 }
 function renderStep() {
   var main = $('#wzMain'); if (!main) return;
-  main.innerHTML = STEP_RENDER[W.step]() +
+  main.innerHTML = notesHtml(W.step) + STEP_RENDER[W.step]() +
     '<div class="wz-nav"><button class="btn" data-go="' + (W.step - 1) + '"' + (W.step === 1 ? ' disabled' : '') + '>' + ic('chevron-left') + ' Sebelumnya</button>' +
     (W.step < 8 ? '<button class="btn btn-primary" data-go="' + (W.step + 1) + '">Berikutnya<span class="nx">: ' + esc(STEPS[W.step].t) + '</span> ' + ic('chevron-right') + '</button>' : '<span></span>') + '</div>';
   if (W.ro) $$('input,select,textarea', main).forEach(function (x) { if (!x.closest('.ro-ok')) x.disabled = true; });
@@ -391,7 +392,7 @@ var STEP_RENDER = {
 
   8: function () {
     var r = W.res, d = W.data, p = d.proyek, me = App.me;
-    var editable = (p.status === 'Draft' || p.status === 'Perlu Revisi') && me.role !== 'STAKEHOLDER';
+    var editable = (p.status === 'Draft' || p.status === 'Perlu Revisi') && me.role === 'CABANG';
     var segs = r.sebaran.map(function (s) { return { label: s.nama, value: s.nilai }; });
     var vl = r.errors.map(function (e) { return '<div class="v e" data-go="' + e.step + '">' + ic('alert') + '<span>' + esc(e.msg) + '</span><span class="stp">Langkah ' + e.step + ' →</span></div>'; }).join('') +
       r.warnings.map(function (e) { return '<div class="v w" data-go="' + e.step + '">' + ic('info') + '<span>' + esc(e.msg) + '</span><span class="stp">Langkah ' + e.step + ' →</span></div>'; }).join('');
@@ -559,6 +560,7 @@ async function onWzClick(e) {
   if (ds['return'] !== undefined) return decide('return', t);
   if (ds.unlock !== undefined) return decide('unlock', t);
   if (ds.delberkas) return deleteBerkas(ds.delberkas, t);
+  if (ds.note) return noteAction(ds.note, ds.id, t);
   if (W.ro) return;
   if (ds.sek) {
     var sid = ds.sek, i = W.sektors.indexOf(sid);
@@ -772,4 +774,74 @@ async function deleteBerkas(bid, btn) {
     if (!res.success) return toast(res.message, 'err');
     W.data.berkas = W.data.berkas.filter(function (b) { return b.berkas_id !== bid; }); cacheDetail(W.id, W.data); compute(); rerender();
   });
+}
+
+
+/* =====================================================================
+ * CATATAN ADMIN per langkah — admin menulis (mode baca data), cabang menanggapi
+ * ===================================================================== */
+function allNotes() { return (W.data && W.data.catatan) || []; }
+function stepNotes(n) { return allNotes().filter(function (c) { return Number(c.step) === n; }).sort(function (a, b) { return String(a.dibuat_at).localeCompare(String(b.dibuat_at)); }); }
+function openNotes(n) { return stepNotes(n).filter(function (c) { return c.status !== 'Selesai'; }); }
+function notesBanner() {
+  var open = allNotes().filter(function (c) { return c.status !== 'Selesai'; });
+  if (!open.length) return '';
+  var steps = {}; open.forEach(function (c) { steps[c.step] = (steps[c.step] || 0) + 1; });
+  var links = Object.keys(steps).sort().map(function (n) { return '<button class="btn btn-xs" data-go="' + n + '">Langkah ' + n + ' (' + steps[n] + ')</button>'; }).join(' ');
+  return App.me.role === 'CABANG'
+    ? '<div class="banner banner-amber">' + ic('info') + '<div><b>' + open.length + ' catatan perbaikan dari pusat belum ditindaklanjuti</b><p>Perbaiki datanya, lalu klik <b>Tandai sudah diperbaiki</b> pada tiap catatan.</p><div class="row mt-s" style="gap:6px">' + links + '</div></div></div>'
+    : '<div class="banner banner-blue">' + ic('info') + '<div><b>' + open.length + ' catatan Anda masih terbuka</b><div class="row mt-s" style="gap:6px">' + links + '</div></div></div>';
+}
+function noteItem(c, role) {
+  var done = c.status === 'Selesai';
+  var head = '<div class="row between" style="gap:8px"><span class="row" style="gap:8px"><span class="badge ' + (done ? 'st-Disetujui' : 'st-Dikirim') + '">' + (done ? 'Sudah diperbaiki' : 'Perlu ditindaklanjuti') + '</span><span class="small muted">' + esc(c.dibuat_oleh || 'Admin') + ' • ' + fmtDate(c.dibuat_at) + (c.diubah_at ? ' (diubah)' : '') + '</span></span>';
+  var acts = '';
+  if (role === 'ADMIN') acts = '<span class="row" style="gap:4px"><button class="btn btn-xs" data-note="edit" data-id="' + c.catatan_id + '">' + ic('edit') + ' Ubah</button><button class="btn btn-xs" data-note="' + (done ? 'reopen' : 'close') + '" data-id="' + c.catatan_id + '">' + (done ? 'Buka lagi' : ic('check') + ' Selesai') + '</button><button class="btn btn-xs btn-danger" data-note="del" data-id="' + c.catatan_id + '">' + ic('trash') + '</button></span>';
+  head += acts + '</div>';
+  var body = '<div class="note-isi">' + esc(c.isi).replace(/\n/g, '<br>') + '</div>';
+  var resp = c.tanggapan || c.ditanggapi_at ? '<div class="note-resp">' + ic('send') + '<div><b>Tanggapan cabang</b> <span class="small muted">' + esc(c.ditanggapi_oleh || '') + ' • ' + fmtDate(c.ditanggapi_at) + '</span><div>' + esc(c.tanggapan || '(tanpa keterangan)') + '</div></div></div>' : '';
+  var form = '';
+  if (role === 'CABANG') form = done
+    ? '<div class="row mt-s"><button class="btn btn-xs" data-note="undo" data-id="' + c.catatan_id + '">Batalkan tanda selesai</button></div>'
+    : '<div class="row mt-s" style="align-items:flex-end"><input class="inp grow" id="resp_' + c.catatan_id + '" placeholder="Tanggapan / apa yang sudah diperbaiki (opsional)" maxlength="1000"><button class="btn btn-sm btn-success" data-note="done" data-id="' + c.catatan_id + '">' + ic('check') + ' Tandai sudah diperbaiki</button></div>';
+  return '<div class="note' + (done ? ' done' : '') + '">' + head + body + resp + form + '</div>';
+}
+function notesHtml(step) {
+  var role = App.me.role, list = stepNotes(step);
+  if (role === 'STAKEHOLDER') return '';
+  if (role === 'CABANG' && !list.length) return '';
+  var title = role === 'ADMIN' ? 'Catatan Admin — Langkah ' + step : 'Catatan Perbaikan dari Pusat — Langkah ' + step;
+  var form = role === 'ADMIN' ? '<div class="note-new"><textarea class="inp" id="noteNew" rows="3" maxlength="1500" placeholder="Tulis catatan perbaikan untuk cabang pada langkah ini…"></textarea><div class="row" style="justify-content:flex-end"><button class="btn btn-primary btn-sm" data-note="add">' + ic('send') + ' Kirim catatan ke cabang</button></div></div>' : '';
+  return '<div class="card notes-card ro-ok' + (role === 'CABANG' ? ' notes-cabang' : '') + '"><div class="card-head"><div><h3>' + ic(role === 'ADMIN' ? 'edit' : 'info') + ' ' + esc(title) + '</h3><p>' + (role === 'ADMIN' ? 'Data cabang hanya bisa dilihat. Catatan langsung muncul di akun cabang pada langkah ini.' : 'Tindak lanjuti catatan berikut, lalu tandai sudah diperbaiki.') + '</p></div>' + (list.length ? '<span class="badge ' + (openNotes(step).length ? 'st-Dikirim' : 'st-Disetujui') + '">' + openNotes(step).length + ' terbuka / ' + list.length + ' catatan</span>' : '') + '</div>' +
+    '<div class="card-pad" style="padding-top:0">' + (list.length ? list.map(function (c) { return noteItem(c, role); }).join('') : '<div class="small muted mb-s">Belum ada catatan pada langkah ini.</div>') + form + '</div></div>';
+}
+function applyNote(row, removeId) {
+  var list = W.data.catatan = W.data.catatan || [];
+  if (removeId) W.data.catatan = list.filter(function (c) { return c.catatan_id !== removeId; });
+  else { var i = list.findIndex(function (c) { return c.catatan_id === row.catatan_id; }); if (i > -1) list[i] = row; else list.push(row); }
+  cacheDetail(W.id, W.data);
+  upsertSummary({ proyek_id: W.id, catatan_terbuka: W.data.catatan.filter(function (c) { return c.status !== 'Selesai'; }).length });
+  var y = window.scrollY; renderWizard(); window.scrollTo(0, y);
+}
+async function noteAction(kind, id, btn) {
+  if (kind === 'add') {
+    var isi = ($('#noteNew') || {}).value || '';
+    if (!isi.trim()) return toast('Tulis isi catatan dulu.', 'warn');
+    return withBtn(btn, async function () { var r = await api('addCatatan', { proyek_id: W.id, step: W.step, isi: isi }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast('Catatan terkirim ke cabang.', 'ok'); });
+  }
+  var c = allNotes().filter(function (x) { return x.catatan_id === id; })[0]; if (!c) return;
+  if (kind === 'edit') {
+    var v = await modal({ title: 'Ubah catatan', body: '<textarea class="inp" id="noteEd" rows="5" maxlength="1500">' + esc(c.isi) + '</textarea>', actions: [{ label: 'Batal', value: null }, { label: 'Simpan', cls: 'btn-primary', onClick: function (bg) { var t = bg.querySelector('#noteEd').value.trim(); if (!t) { toast('Isi catatan wajib diisi.', 'warn'); return false; } return t; } }] });
+    if (!v) return;
+    var r1 = await api('updateCatatan', { catatan_id: id, isi: v }); if (!r1.success) return toast(r1.message, 'err'); return applyNote(r1.data);
+  }
+  if (kind === 'del') {
+    if (!(await confirmBox('Hapus catatan?', 'Catatan akan hilang dari akun cabang.', 'Hapus', 'btn-danger'))) return;
+    return withBtn(btn, async function () { var r = await api('deleteCatatan', { catatan_id: id }); if (!r.success) return toast(r.message, 'err'); applyNote(null, id); toast('Catatan dihapus.', 'ok'); });
+  }
+  if (kind === 'close' || kind === 'reopen') return withBtn(btn, async function () { var r = await api('updateCatatan', { catatan_id: id, status: kind === 'close' ? 'Selesai' : 'Terbuka' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); });
+  if (kind === 'done' || kind === 'undo') {
+    var tg = kind === 'done' ? (($('#resp_' + id) || {}).value || '') : c.tanggapan;
+    return withBtn(btn, async function () { var r = await api('tanggapiCatatan', { catatan_id: id, tanggapan: tg, selesai: kind === 'done' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast(kind === 'done' ? 'Ditandai sudah diperbaiki. Admin akan melihatnya.' : 'Tanda selesai dibatalkan.', 'ok'); });
+  }
 }

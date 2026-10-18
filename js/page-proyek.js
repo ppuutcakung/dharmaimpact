@@ -54,7 +54,7 @@ registerPage('proyek', {
     el.innerHTML = '<div class="card"><div class="card-head"><div><h3>Daftar Perhitungan SROI</h3><p>Satu perhitungan = satu cabang × satu tahun</p></div><div class="row">' +
       '<select class="inp" id="pTh" style="width:auto"></select>' + (App.me.role === 'ADMIN' ? '<select class="inp" id="pCab" style="width:auto"></select>' : '') +
       '<select class="inp" id="pSt" style="width:auto"><option value="">Semua status</option><option>Draft</option><option>Dikirim</option><option>Perlu Revisi</option><option>Disetujui</option></select>' +
-      '<button class="btn btn-primary" data-act="new">' + ic('plus') + ' Hitung Baru</button></div></div><div class="tbl-wrap"><table class="tbl" id="pTbl"></table></div></div>';
+      (App.me.role === 'CABANG' ? '<button class="btn btn-primary" data-act="new">' + ic('plus') + ' Hitung Baru</button>' : '') + '</div></div><div class="tbl-wrap"><table class="tbl" id="pTbl"></table></div></div>';
     var self = this;
     el.addEventListener('change', function (e) { if (e.target.id === 'pTh') self.f.tahun = e.target.value; if (e.target.id === 'pCab') self.f.cabang = e.target.value; if (e.target.id === 'pSt') self.f.status = e.target.value; self.render(el); });
     el.addEventListener('click', async function (e) {
@@ -72,7 +72,7 @@ registerPage('proyek', {
     });
   },
   show: function (el) {
-    setTitle('Perhitungan SROI', 'Daftar Perhitungan');
+    setTitle('Perhitungan SROI', App.me.role === 'ADMIN' ? 'Daftar Perhitungan (mode baca)' : 'Daftar Perhitungan');
     $('#pTh', el).innerHTML = '<option value="">Semua tahun</option>' + M.years().map(function (y) { return '<option>' + y + '</option>'; }).join('');
     $('#pTh', el).value = this.f.tahun;
     if ($('#pCab', el)) { $('#pCab', el).innerHTML = '<option value="">Semua cabang</option>' + M.cabangAktif().map(function (c) { return '<option value="' + c.cabang_id + '">' + esc(c.nama_cabang) + '</option>'; }).join(''); $('#pCab', el).value = this.f.cabang; }
@@ -84,11 +84,11 @@ registerPage('proyek', {
       .sort(function (a, b) { return b.tahun - a.tahun || String(b.diubah_at).localeCompare(String(a.diubah_at)); });
     $('#pTbl', el).innerHTML = '<thead><tr><th>Tahun</th><th>Cabang</th><th>Nama Program</th><th class="r">Rasio</th><th>Bintang</th><th class="c">Status</th><th class="hide-sm">Diubah</th><th class="c">Aksi</th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (p) {
-        var hx = N(p.hasil_pv_investasi) > 0, edit = ['Draft', 'Perlu Revisi'].indexOf(p.status) > -1;
-        return '<tr><td class="b">' + p.tahun + '</td><td>' + esc(M.cabangName(p.cabang_id)) + '</td><td><a class="link" data-act="open" data-id="' + p.proyek_id + '">' + esc(p.nama_program) + '</a>' + (N(p.hasil_error) && edit ? '<span class="sub text-red">' + p.hasil_error + ' kesalahan validasi</span>' : '') + '</td>' +
+        var hx = N(p.hasil_pv_investasi) > 0, edit = App.me.role === 'CABANG' && ['Draft', 'Perlu Revisi'].indexOf(p.status) > -1, nc = N(p.catatan_terbuka);
+        return '<tr><td class="b">' + p.tahun + '</td><td>' + esc(M.cabangName(p.cabang_id)) + '</td><td><a class="link" data-act="open" data-id="' + p.proyek_id + '">' + esc(p.nama_program) + '</a>' + (nc ? ' <span class="badge st-Dikirim" title="Catatan admin yang belum selesai">' + nc + ' catatan</span>' : '') + (N(p.hasil_error) && edit ? '<span class="sub text-red">' + p.hasil_error + ' kesalahan validasi</span>' : '') + '</td>' +
           '<td class="r tnum b text-primary">' + (hx ? ratioFmt(N(p.hasil_rasio)) : '—') + '</td><td>' + (hx ? starsHtml(p.hasil_bintang, 'sm') : '—') + '</td><td class="c">' + badge(p.status) + '</td><td class="hide-sm small muted">' + fmtDate(p.diubah_at) + '<span class="sub">' + esc(p.diubah_oleh || '') + '</span></td>' +
-          '<td class="c nowrap"><button class="btn btn-sm ' + (edit ? 'btn-primary' : '') + '" data-act="open" data-id="' + p.proyek_id + '">' + ic(edit ? 'edit' : 'eye') + (edit ? ' Isi' : ' Lihat') + '</button>' + ((App.me.role === 'ADMIN' ? p.status !== 'Disetujui' : p.status === 'Draft') ? ' <button class="btn btn-icon btn-sm btn-danger" data-act="del" data-id="' + p.proyek_id + '" title="Hapus">' + ic('trash') + '</button>' : '') + '</td></tr>';
-      }).join('') : '<tr><td colspan="8"><div class="empty">' + ic('calculator') + '<div>Belum ada perhitungan. Klik <b>Hitung Baru</b> untuk memulai.</div></div></td></tr>') + '</tbody>';
+          '<td class="c nowrap"><button class="btn btn-sm ' + (edit ? 'btn-primary' : '') + '" data-act="open" data-id="' + p.proyek_id + '">' + ic(edit ? 'edit' : 'eye') + (edit ? ' Isi' : ' Lihat') + '</button>' + ((App.me.role === 'CABANG' && p.status === 'Draft') ? ' <button class="btn btn-icon btn-sm btn-danger" data-act="del" data-id="' + p.proyek_id + '" title="Hapus">' + ic('trash') + '</button>' : '') + '</td></tr>';
+      }).join('') : '<tr><td colspan="8"><div class="empty">' + ic('calculator') + (App.me.role === 'CABANG' ? '<div>Belum ada perhitungan. Klik <b>Hitung Baru</b> untuk memulai.</div>' : '<div>Belum ada perhitungan dari cabang.</div>') + '</div></td></tr>') + '</tbody>';
   }
 });
 
