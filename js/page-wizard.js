@@ -46,7 +46,7 @@ registerPage('wizard', {
     W.timer = setInterval(function () { if (hasDirty()) saveNow('auto'); }, CFG.AUTOSAVE_MS || 30000);
     if (W.id === id && W.data) { if (step) W.step = step; renderWizard(); refreshDetail(id); return; }
     if (W.id && W.id !== id && hasDirty()) saveNow('switch');
-    W.id = id; W.step = step || 1; W.unlockOpen = false; W.dirty = {}; W.infoDirty = 0; W.lastSaved = ''; W.saveErr = '';
+    W.id = id; W.step = step || 1; W.unlockOpen = false; W.unlockNotes = []; W.dirty = {}; W.infoDirty = 0; W.lastSaved = ''; W.saveErr = '';
     var c = cachedDetail(id), draft = Store.get(userKey('wd:' + id), null);
     if (draft && draft.data && (!c || N(draft.rev) >= N(c.proyek.rev))) {
       W.data = draft.data; (draft.dirty || []).forEach(function (s) { W.dirty[s] = ++W.ver; }); W.infoDirty = draft.info ? ++W.ver : 0;
@@ -130,6 +130,7 @@ function renderWizard() {
   var banner = '';
   if (p.status === 'Perlu Revisi' && p.catatan_revisi) banner = '<div class="banner banner-red">' + ic('alert') + '<div><b>Catatan revisi dari pusat</b><p>' + esc(p.catatan_revisi) + '</p></div></div>';
   else if (p.status === 'Dikirim') banner = '<div class="banner banner-amber">' + ic('lock') + '<div><b>Terkirim — menunggu verifikasi pusat</b><p>Data terkunci sejak ' + fmtDate(p.dikirim_at) + '.' + (me.role === 'ADMIN' ? ' Periksa lalu putuskan di langkah 8.' : '') + '</p></div>' + (me.role === 'ADMIN' && W.step !== 8 ? '<div class="act"><button class="btn btn-primary btn-sm" data-go="8">Ke keputusan</button></div>' : '') + '</div>';
+  else if (p.status === 'Disetujui' && me.role === 'ADMIN' && W.unlockOpen) banner = '<div class="banner banner-amber">' + ic('unlock') + '<div><b>Kunci dibuka — catatan admin aktif</b><p>Tulis catatan revisi di langkah 1–7 bila perlu, lalu klik <b>Kembalikan untuk Revisi</b> di langkah 8. Selama belum dikembalikan, laporan tetap terkunci untuk cabang.</p></div><div class="act"><button class="btn btn-sm" data-relock>' + ic('lock') + ' Kunci Kembali</button>' + (W.step !== 8 ? '<button class="btn btn-danger btn-sm" data-go="8">' + ic('refresh') + ' Kembalikan untuk Revisi →</button>' : '') + '</div></div>';
   else if (p.status === 'Disetujui') banner = '<div class="banner banner-green">' + ic('lock') + '<div><b>Disetujui & terkunci</b><p>Disetujui ' + fmtDate(p.disetujui_at) + ' oleh ' + esc(p.disetujui_oleh || 'Super Admin') + '. ' +
     (me.role === 'CABANG' ? 'Laporan ini hanya bisa dilihat — tidak bisa diubah atau dihapus. Bila perlu perubahan, pusat akan membuka kunci dan mengembalikannya untuk revisi.' : me.role === 'ADMIN' ? 'Bila perlu perubahan, buka kunci lalu kembalikan ke cabang untuk revisi.' : 'Hasil resmi dihitung ulang oleh server.') + '</p></div>' +
     (me.role === 'ADMIN' && !W.unlockOpen ? '<div class="act"><button class="btn btn-warn btn-sm" data-unlock>' + ic('unlock') + ' Buka Kunci</button></div>' : '') + '</div>';
@@ -563,8 +564,8 @@ async function onWzClick(e) {
   if (ds.submit !== undefined) return submitNow(t);
   if (ds.approve !== undefined) return decide('approve', t);
   if (ds['return'] !== undefined) return decide('return', t);
-  if (ds.unlock !== undefined) { W.unlockOpen = true; if (W.step !== 8) goStep(8); renderWizard(); var dc = $('#decideCard'); if (dc) dc.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-  if (ds.relock !== undefined) { W.unlockOpen = false; renderWizard(); return toast('Dikunci kembali — tidak ada perubahan.', 'ok'); }
+  if (ds.unlock !== undefined) { W.unlockOpen = true; W.unlockNotes = []; renderWizard(); toast('Kunci dibuka — catatan admin di langkah 1–7 aktif.', 'ok'); var dc = $('#decideCard'); if (dc) dc.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  if (ds.relock !== undefined) return relock(t);
   if (ds.delberkas) return deleteBerkas(ds.delberkas, t);
   if (ds.note) return noteAction(ds.note, ds.id, t);
   if (W.ro) return;
@@ -742,7 +743,7 @@ async function decide(kind, btn) {
   await withBtn(btn, async function () {
     var res = await api(action, payload);
     if (!res.success) { toast(res.message, 'err'); if (res.data && res.data.errors) showServerErrors(res.data.errors); return; }
-    W.unlockOpen = false;
+    W.unlockOpen = false; W.unlockNotes = [];
     applyStatus(res.data);
     toast(kind === 'approve' ? 'Perhitungan disetujui & dikunci.' : wasApproved ? 'Kunci dibuka & dikembalikan ke cabang untuk revisi.' : 'Dikembalikan ke cabang untuk revisi.', 'ok');
   });
@@ -793,7 +794,9 @@ async function deleteBerkas(bid, btn) {
  * CATATAN ADMIN per langkah — admin menulis (mode baca data), cabang menanggapi
  * ===================================================================== */
 var NOTE_STEPS = 7;   // catatan admin hanya untuk langkah isian cabang (1–7)
-function allNotes() { return ((W.data && W.data.catatan) || []).filter(function (c) { return Number(c.step) >= 1 && Number(c.step) <= NOTE_STEPS; }); }
+/** Catatan admin berlaku selama proses revisi/verifikasi: belum Disetujui, atau admin sedang membuka kunci. */
+function notesActive() { var p = W.data && W.data.proyek; return !!p && (p.status !== 'Disetujui' || (App.me.role === 'ADMIN' && !!W.unlockOpen)); }
+function allNotes() { if (!notesActive()) return []; return ((W.data && W.data.catatan) || []).filter(function (c) { return Number(c.step) >= 1 && Number(c.step) <= NOTE_STEPS; }); }
 function stepNotes(n) { return allNotes().filter(function (c) { return Number(c.step) === n; }).sort(function (a, b) { return String(a.dibuat_at).localeCompare(String(b.dibuat_at)); }); }
 function openNotes(n) { return stepNotes(n).filter(function (c) { return c.status !== 'Selesai'; }); }
 function notesBanner() {
@@ -820,6 +823,7 @@ function noteItem(c, role) {
 function notesHtml(step) {
   var role = App.me.role, list = stepNotes(step);
   if (role === 'STAKEHOLDER' || step > NOTE_STEPS) return '';
+  if (!notesActive()) return role === 'ADMIN' ? '<div class="notes-off ro-ok">' + ic('lock') + '<span>Catatan admin tidak berlaku — laporan sudah <b>Disetujui</b>. Catatan hanya aktif selama proses revisi/verifikasi.</span><button class="btn btn-xs" data-unlock>' + ic('unlock') + ' Buka Kunci untuk revisi</button></div>' : '';
   if (role === 'CABANG') list = list.filter(function (c) { return c.status !== 'Selesai'; });   // yang sudah dikonfirmasi disembunyikan
   if (role === 'CABANG' && !list.length) return '';
   var title = role === 'ADMIN' ? 'Catatan Admin — Langkah ' + step : 'Catatan Perbaikan dari Pusat — Langkah ' + step;
@@ -839,22 +843,34 @@ async function noteAction(kind, id, btn) {
   if (kind === 'add') {
     var isi = ($('#noteNew') || {}).value || '';
     if (!isi.trim()) return toast('Tulis isi catatan dulu.', 'warn');
-    return withBtn(btn, async function () { var r = await api('addCatatan', { proyek_id: W.id, step: W.step, isi: isi }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast('Catatan terkirim ke cabang.', 'ok'); });
+    return withBtn(btn, async function () { var r = await api('addCatatan', { proyek_id: W.id, step: W.step, isi: isi, saatBukaKunci: !!W.unlockOpen }); if (!r.success) return toast(r.message, 'err'); if (W.unlockOpen) W.unlockNotes.push(r.data.catatan_id); applyNote(r.data); toast('Catatan terkirim ke cabang.', 'ok'); });
   }
   var c = allNotes().filter(function (x) { return x.catatan_id === id; })[0]; if (!c) return;
   if (kind === 'edit') {
     var v = await modal({ title: 'Ubah catatan', body: '<textarea class="inp" id="noteEd" rows="5" maxlength="1500">' + esc(c.isi) + '</textarea>', actions: [{ label: 'Batal', value: null }, { label: 'Simpan', cls: 'btn-primary', onClick: function (bg) { var t = bg.querySelector('#noteEd').value.trim(); if (!t) { toast('Isi catatan wajib diisi.', 'warn'); return false; } return t; } }] });
     if (!v) return;
-    var r1 = await api('updateCatatan', { catatan_id: id, isi: v }); if (!r1.success) return toast(r1.message, 'err'); return applyNote(r1.data);
+    var r1 = await api('updateCatatan', { catatan_id: id, isi: v, saatBukaKunci: !!W.unlockOpen }); if (!r1.success) return toast(r1.message, 'err'); return applyNote(r1.data);
   }
   if (kind === 'del') {
     if (!(await confirmBox('Hapus catatan?', 'Catatan akan hilang dari akun cabang.', 'Hapus', 'btn-danger'))) return;
     return withBtn(btn, async function () { var r = await api('deleteCatatan', { catatan_id: id }); if (!r.success) return toast(r.message, 'err'); applyNote(null, id); toast('Catatan dihapus.', 'ok'); });
   }
-  if (kind === 'close' || kind === 'reopen') return withBtn(btn, async function () { var r = await api('updateCatatan', { catatan_id: id, status: kind === 'close' ? 'Selesai' : 'Terbuka' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); });
+  if (kind === 'close' || kind === 'reopen') return withBtn(btn, async function () { var r = await api('updateCatatan', { catatan_id: id, saatBukaKunci: !!W.unlockOpen, status: kind === 'close' ? 'Selesai' : 'Terbuka' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); });
   if (kind === 'done' || kind === 'undo') {
     var tg = kind === 'done' ? (($('#resp_' + id) || {}).value || '') : c.tanggapan;
     if (kind === 'done' && !(await confirmBox('Konfirmasi catatan sudah dikerjakan?', 'Catatan <b>"' + esc(String(c.isi).slice(0, 120)) + '"</b> akan ditandai selesai dan hilang dari tampilan langkah ' + c.step + '. Admin tetap bisa melihatnya beserta keterangan Anda.', ic('check') + ' Konfirmasi', 'btn-success'))) return;
     return withBtn(btn, async function () { var r = await api('tanggapiCatatan', { catatan_id: id, tanggapan: tg, selesai: kind === 'done' }); if (!r.success) return toast(r.message, 'err'); applyNote(r.data); toast(kind === 'done' ? 'Catatan dikonfirmasi sudah dikerjakan.' : 'Tanda selesai dibatalkan.', 'ok'); });
   }
+}
+
+/** Kunci kembali tanpa mengembalikan: catatan yang ditulis selama kunci dibuka dihapus (laporan tetap Disetujui). */
+async function relock(btn) {
+  var ids = (W.unlockNotes || []).filter(function (id) { return ((W.data.catatan) || []).some(function (c) { return c.catatan_id === id; }); });
+  if (ids.length && !(await confirmBox('Kunci kembali?', ids.length + ' catatan yang Anda tulis selama kunci dibuka akan <b>dihapus</b>, karena laporan tetap Disetujui dan tidak dikembalikan ke cabang.', ic('lock') + ' Kunci & hapus catatan', 'btn-danger'))) return;
+  await withBtn(btn, async function () {
+    for (var i = 0; i < ids.length; i++) { var r = await api('deleteCatatan', { catatan_id: ids[i] }); if (r.success) W.data.catatan = W.data.catatan.filter(function (c) { return c.catatan_id !== ids[i]; }); }
+    W.unlockOpen = false; W.unlockNotes = [];
+    cacheDetail(W.id, W.data); var y = window.scrollY; renderWizard(); window.scrollTo(0, y);
+    toast(ids.length ? 'Dikunci kembali — ' + ids.length + ' catatan sementara dihapus.' : 'Dikunci kembali — tidak ada perubahan.', 'ok');
+  });
 }
