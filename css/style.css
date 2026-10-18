@@ -487,5 +487,7 @@ i.tmark { display: inline-block; width: 4px; height: 12px; border-radius: 1px; b
 .chart-note i { font-style: normal; color: #CBD5E1; margin: 0 2px; }
 .chart-note .ok { color: #15803D; font-weight: 600; }
 .chart-note .warn { color: #B45309; font-weight: 600; }
-.card-pad.bar-col { justify-content: center; }
-.card-pad.bar-col > #dBar { min-height: 60px; }
+/* grafik SROI per cabang: batang di tengah ruang, keterangan selalu menempel di bawah kartu */
+.card-pad.bar-col { justify-content: flex-start; }
+.card-pad.bar-col > #dBar { flex: 1; min-height: 60px; display: flex; flex-direction: column; justify-content: center; }
+.card-pad.bar-col > .chart-note, .card-pad.chart-col > .chart-note { margin-top: auto; }

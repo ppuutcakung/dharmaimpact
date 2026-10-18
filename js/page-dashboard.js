@@ -43,15 +43,18 @@ function trendNote(tr, lbl, tLbl) {
   out.push(last.y >= 1 ? 'Setiap Rp1 investasi menghasilkan ±Rp' + fmtNum(last.y, 2) + ' manfaat sosial.' : '<span class="warn">Masih di bawah titik impas 1,00.</span>');
   return out.join(' <i>•</i> ');
 }
-/** Keterangan analisa singkat di bawah grafik SROI per cabang. */
-function barNote(rows) {
+/** Keterangan analisa umum (akumulasi) di bawah grafik SROI per cabang — tidak menyebut cabang tertentu. */
+function barNote(rows, o) {
+  o = o || {};
   if (!rows.length) return '';
-  var srt = rows.slice().sort(function (a, b) { return b.value - a.value; }), withT = rows.filter(function (r) { return r.target; }), hit = withT.filter(function (r) { return r.value >= r.target; }).length, ok1 = rows.filter(function (r) { return r.value >= 1; }).length;
-  var out = [];
-  if (rows.length > 1) out.push('Tertinggi <b>' + esc(srt[0].label) + '</b> (' + fmtNum(srt[0].value, 2) + ')', 'Terendah <b>' + esc(srt[srt.length - 1].label) + '</b> (' + fmtNum(srt[srt.length - 1].value, 2) + ')');
-  else out.push('<b>' + esc(srt[0].label) + '</b>: rasio ' + fmtNum(srt[0].value, 2) + (srt[0].target ? ' dari target ' + fmtNum(srt[0].target, 2) + ' (' + pctFmt(srt[0].value / srt[0].target, 0) + ')' : ''));
-  out.push(ok1 + ' dari ' + rows.length + ' cabang di atas titik impas');
+  var vals = rows.map(function (r) { return r.value; }), withT = rows.filter(function (r) { return r.target; });
+  var hit = withT.filter(function (r) { return r.value >= r.target; }).length, ok1 = rows.filter(function (r) { return r.value >= 1; }).length;
+  var out = ['<b>' + rows.length + (o.aktif ? ' dari ' + o.aktif : '') + ' cabang</b> sudah disetujui'];
+  if (o.avg != null) out.push('Rata-rata tertimbang <b>' + ratioFmt(o.avg) + '</b>');
+  if (rows.length > 1) out.push('Rentang rasio ' + fmtNum(Math.min.apply(null, vals), 2) + ' – ' + fmtNum(Math.max.apply(null, vals), 2));
+  out.push('<span class="' + (ok1 === rows.length ? 'ok' : 'warn') + '">' + ok1 + ' dari ' + rows.length + ' cabang di atas titik impas</span>');
   if (withT.length) out.push('<span class="' + (hit === withT.length ? 'ok' : 'warn') + '">' + hit + ' dari ' + withT.length + ' cabang mencapai target</span>');
+  else out.push('<span class="muted">Target cabang belum ditetapkan</span>');
   return out.join(' <i>•</i> ');
 }
 function tgtCell(ratio, target, has) {
@@ -122,7 +125,7 @@ registerPage('dashboard', {
     var thY = this.f.tahun;
     var rows = ok.map(function (p) { var r = proyekRatio(p), t = M.targetCabang(thY, p.cabang_id); return { label: M.cabangName(p.cabang_id), value: r, target: t, color: r < 1 ? '#DC2626' : tp(), note: r < 1 ? '(Defisit)' : (t && r >= t ? '✓' : '') }; }).sort(function (a, b) { return b.value - a.value; });
     ChartFit.mount($('#dBar', el), function (w) { return Charts.barH(rows, { ref: 1, refLabel: 'Titik impas (1,00)', fmt: function (v) { return fmtNum(v, 2); }, pw: w }); });
-    $('#dBarNote', el).innerHTML = barNote(rows);
+    $('#dBarNote', el).innerHTML = barNote(rows, { aktif: cab.length, avg: ok.length ? w.ratio : null });
     var segs = Agg.sebaran(ok);
     var tot = segs.reduce(function (a, s) { return a + s.value; }, 0);
     $('#dDonutSub', el).textContent = 'Alokasi nilai dampak bersih dari ' + rpShort(tot);
