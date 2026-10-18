@@ -151,8 +151,8 @@ function goStep(n) {
 function attrB(sec, id, f) { return ' data-b="' + sec + '|' + esc(id) + '|' + f + '"'; }
 function inText(sec, id, f, v, ph, cls) { return '<input class="inp ' + (cls || '') + '"' + attrB(sec, id, f) + ' value="' + esc(v) + '" placeholder="' + esc(ph || '') + '">'; }
 function inNum(sec, id, f, v, kind, ph) {
-  var cls = kind === 'pct' ? 'pct' : 'num';
-  var inp = '<input class="inp ' + cls + '" inputmode="decimal" data-k="' + (kind || 'money') + '"' + attrB(sec, id, f) + ' value="' + esc(numIn(v, kind === 'money' ? 0 : 2)) + '" placeholder="' + (ph || (kind === 'pct' ? '0' : '0')) + '">';
+  var cls = kind === 'pct' ? 'pct' : kind === 'money' ? 'num money' : 'num';
+  var inp = '<input class="inp ' + cls + '" inputmode="' + (kind === 'money' ? 'numeric' : 'decimal') + '" data-k="' + (kind || 'money') + '"' + attrB(sec, id, f) + ' value="' + esc(numIn(v, kind === 'money' ? 0 : 2)) + '" placeholder="' + (ph || (kind === 'pct' ? '0' : '0')) + '">';
   if (kind === 'pct') return '<div class="inp-wrap">' + inp + '<span class="post">%</span></div>';
   return inp;
 }
@@ -494,7 +494,7 @@ function onWzInput(e) {
   if (!t.dataset.b) return;
   var b = t.dataset.b.split('|'), sec = b[0], id = b[1], f = b[2], r = findRow(sec, id);
   if (!r) return;
-  r[f] = t.dataset.k ? parseID(t.value) : t.value;
+  r[f] = t.dataset.k ? parseNum(t.value, t.dataset.k) : t.value;
   markDirty(sec);
   if (sec === 'info' && f === 'nama_program') { var h = $('.wz-head h2'); if (h) h.textContent = t.value || 'Perhitungan SROI'; }
   calcSoon();
@@ -512,7 +512,7 @@ function onWzChange(e) {
 }
 function onWzBlur(e) {
   var t = e.target; if (!t.dataset || !t.dataset.k || W.ro) return;
-  var v = parseID(t.value); t.value = numIn(v, t.dataset.k === 'money' ? 0 : 2);
+  var v = parseNum(t.value, t.dataset.k); t.value = numIn(v, t.dataset.k === 'money' ? 0 : 2);
 }
 function sortSektors() { var ord = (App.master.sektor || []).map(function (s) { return s.sektor_id; }); W.sektors.sort(function (a, b) { return ord.indexOf(a) - ord.indexOf(b); }); }
 

@@ -113,14 +113,42 @@ function ratioFmt(r) { return fmtNum(r, 2) + ' : 1'; }
 function starsHtml(n, cls) { n = Number(n) || 0; var s = ''; for (var i = 1; i <= 5; i++) s += i <= n ? '★' : '<span class="off">★</span>'; return '<span class="stars ' + (cls || '') + '" title="Bintang ' + n + '">' + s + '</span>'; }
 function stClass(st) { return st === 'Disetujui' ? 'st-Disetujui' : st === 'Dikirim' ? 'st-Dikirim' : st === 'Perlu Revisi' ? 'st-Revisi' : st === 'Draft' ? 'st-Draft' : 'st-Belum'; }
 function badge(st) { return '<span class="badge ' + stClass(st) + '">' + esc(st || 'Belum Mulai') + '</span>'; }
-/** Parse input pengguna: "1.234.567" → 1234567 ; "12,5" → 12.5 */
+/** Rupiah: hanya angka bulat — titik & koma selalu dianggap pemisah ribuan. "9.820.000" / "9,820,000" / "Rp 9.820.000" → 9820000 */
+function parseMoney(s) {
+  var neg = /^\s*[-−]/.test(String(s == null ? '' : s));
+  var d = String(s == null ? '' : s).replace(/[^\d]/g, '');
+  if (!d) return '';
+  var x = Number(d); return isFinite(x) ? (neg ? -x : x) : '';
+}
+/** Angka desimal format Indonesia: koma = desimal, titik = ribuan. Bila keduanya ada, pemisah terakhir = desimal. */
 function parseID(s) {
   s = String(s == null ? '' : s).trim().replace(/[^\d,.\-]/g, '');
   if (!s) return '';
-  if (s.indexOf(',') > -1) s = s.replace(/\./g, '').replace(',', '.');
-  else if ((s.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(s)) s = s.replace(/\./g, '');
+  var lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+  if (lc > -1 && ld > -1) {                          // dua jenis pemisah: yang terakhir = desimal
+    if (lc > ld) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (lc > -1) {                             // hanya koma
+    s = (s.match(/,/g) || []).length > 1 ? s.replace(/,/g, '') : s.replace(',', '.');
+  } else if (ld > -1) {                             // hanya titik
+    if ((s.match(/\./g) || []).length > 1 || /\.\d{3}$/.test(s)) s = s.replace(/\./g, '');
+  }
   var x = Number(s); return isFinite(x) ? x : '';
 }
+function parseNum(s, kind) { return kind === 'money' ? parseMoney(s) : parseID(s); }
+/** Format rupiah langsung saat mengetik (titik ribuan) dengan posisi kursor tetap */
+function liveMoney(inp) {
+  var v = inp.value, pos = inp.selectionStart == null ? v.length : inp.selectionStart;
+  var digitsBefore = v.slice(0, pos).replace(/[^\d]/g, '').length;
+  var n = parseMoney(v);
+  var out = n === '' ? '' : Number(n).toLocaleString('id-ID', { maximumFractionDigits: 0 });
+  if (out === v) return;
+  inp.value = out;
+  var i = 0, seen = 0;
+  while (i < out.length && seen < digitsBefore) { if (/\d/.test(out[i])) seen++; i++; }
+  try { inp.setSelectionRange(i, i); } catch (e) { }
+}
+document.addEventListener('input', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('money')) liveMoney(t); }, true);
 function numIn(v, d) { if (v === '' || v == null) return ''; var x = Number(v); if (!isFinite(x)) return ''; return x.toLocaleString('id-ID', { maximumFractionDigits: d == null ? 2 : d }); }
 function initials(s) { return String(s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase(); }
 function fmtDate(s) {

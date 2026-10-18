@@ -78,7 +78,7 @@ registerPage('master', {
     var th = this.ctTh, ys = M.years(); if (ys.indexOf(th) < 0) ys.unshift(th); if (ys.indexOf(new Date().getFullYear() + 1) < 0) ys.unshift(new Date().getFullYear() + 1);
     return '<div class="card"><div class="card-head"><div><h3>UMK & Budget per Cabang per Tahun</h3><p>Wajib terisi sebelum cabang bisa membuat perhitungan tahun tersebut (B3).</p></div><select class="inp" id="ctTh" style="width:auto">' + ys.map(function (y) { return '<option' + (y === th ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></div>' +
       '<div class="tbl-wrap"><table class="tbl edit"><thead><tr><th>Cabang</th><th class="r" style="min-width:180px">UMK (Rp/bulan)</th><th class="r" style="min-width:200px">Budget Program (Rp)</th><th class="c">Aksi</th></tr></thead><tbody>' +
-      M.cabangAktif().map(function (c) { var r = M.ct(c.cabang_id, th); return '<tr><td class="b">' + esc(c.nama_cabang) + '<span class="sub">' + esc(c.lokasi || '') + '</span></td><td><input class="inp num" inputmode="decimal" id="umk_' + c.cabang_id + '" value="' + esc(numIn(r.umk, 0)) + '"></td><td><input class="inp num" inputmode="decimal" id="bud_' + c.cabang_id + '" value="' + esc(numIn(r.budget_program, 0)) + '"></td><td class="c nowrap"><button class="btn btn-sm btn-primary" data-m="save-ct" data-id="' + c.cabang_id + '">' + ic('save') + ' Simpan</button>' + (r.cabang_id ? ' <button class="btn btn-icon btn-sm btn-danger" data-m="del-ct" data-id="' + c.cabang_id + '" title="Hapus UMK & budget tahun ini">' + ic('trash') + '</button>' : '') + '</td></tr>'; }).join('') +
+      M.cabangAktif().map(function (c) { var r = M.ct(c.cabang_id, th); return '<tr><td class="b">' + esc(c.nama_cabang) + '<span class="sub">' + esc(c.lokasi || '') + '</span></td><td><input class="inp num money" inputmode="numeric" id="umk_' + c.cabang_id + '" value="' + esc(numIn(r.umk, 0)) + '"></td><td><input class="inp num money" inputmode="numeric" id="bud_' + c.cabang_id + '" value="' + esc(numIn(r.budget_program, 0)) + '"></td><td class="c nowrap"><button class="btn btn-sm btn-primary" data-m="save-ct" data-id="' + c.cabang_id + '">' + ic('save') + ' Simpan</button>' + (r.cabang_id ? ' <button class="btn btn-icon btn-sm btn-danger" data-m="del-ct" data-id="' + c.cabang_id + '" title="Hapus UMK & budget tahun ini">' + ic('trash') + '</button>' : '') + '</td></tr>'; }).join('') +
       '</tbody></table></div></div>';
   },
   r_kpi: function () {
@@ -150,7 +150,7 @@ registerPage('master', {
       });
     }
     if (m === 'save-ct') {
-      var cid = btn.dataset.id, umk = parseID($('#umk_' + cid, el).value), bud = parseID($('#bud_' + cid, el).value);
+      var cid = btn.dataset.id, umk = parseMoney($('#umk_' + cid, el).value), bud = parseMoney($('#bud_' + cid, el).value);
       return withBtn(btn, async function () {
         var res = await api('saveCabangTahun', { row: { cabang_id: cid, tahun: self.ctTh, umk: umk || 0, budget_program: bud || 0 } });
         if (!res.success) return toast(res.message, 'err');
