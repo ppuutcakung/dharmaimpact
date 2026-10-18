@@ -496,7 +496,7 @@ registerPage('tampilan', {
 var LOG_LABEL = {
   CATATAN_ADMIN: 'Catatan admin', CATATAN_DIUBAH: 'Ubah catatan', CATATAN_DIHAPUS: 'Hapus catatan', CATATAN_SELESAI: 'Catatan selesai', CATATAN_DIBUKA: 'Catatan dibuka lagi', CATATAN_DITANGGAPI: 'Tanggapan cabang',
   UBAH_DATA: 'Ubah data SROI', BUAT_PROYEK: 'Buat perhitungan', SALIN_PROYEK: 'Salin perhitungan', HAPUS_PROYEK: 'Hapus perhitungan',
-  KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci',
+  KIRIM: 'Kirim ke pusat', SETUJUI: 'Setujui', KEMBALIKAN: 'Kembalikan revisi', BUKA_KUNCI: 'Buka kunci & kembalikan revisi',
   UNGGAH_BERKAS: 'Unggah berkas', HAPUS_BERKAS: 'Hapus berkas', GANTI_PASSWORD: 'Ganti password', RESET_PASSWORD: 'Reset password',
   BUAT_AKUN: 'Buat akun', UBAH_AKUN: 'Ubah akun', HAPUS_AKUN: 'Hapus akun', UBAH_KPI: 'Ubah KPI', UBAH_TARGET_SROI: 'Ubah target SROI', HAPUS_TARGET_SROI: 'Hapus target SROI', HAPUS_KPI: 'Hapus KPI',
   UBAH_PARAMETER: 'Ubah parameter', UBAH_UMK_BUDGET: 'Ubah UMK & budget', UBAH_TAMPILAN: 'Ubah tampilan', BERSIHKAN_LOG: 'Bersihkan log',

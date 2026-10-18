@@ -46,7 +46,7 @@ registerPage('wizard', {
     W.timer = setInterval(function () { if (hasDirty()) saveNow('auto'); }, CFG.AUTOSAVE_MS || 30000);
     if (W.id === id && W.data) { if (step) W.step = step; renderWizard(); refreshDetail(id); return; }
     if (W.id && W.id !== id && hasDirty()) saveNow('switch');
-    W.id = id; W.step = step || 1; W.dirty = {}; W.infoDirty = 0; W.lastSaved = ''; W.saveErr = '';
+    W.id = id; W.step = step || 1; W.unlockOpen = false; W.dirty = {}; W.infoDirty = 0; W.lastSaved = ''; W.saveErr = '';
     var c = cachedDetail(id), draft = Store.get(userKey('wd:' + id), null);
     if (draft && draft.data && (!c || N(draft.rev) >= N(c.proyek.rev))) {
       W.data = draft.data; (draft.dirty || []).forEach(function (s) { W.dirty[s] = ++W.ver; }); W.infoDirty = draft.info ? ++W.ver : 0;
@@ -130,7 +130,9 @@ function renderWizard() {
   var banner = '';
   if (p.status === 'Perlu Revisi' && p.catatan_revisi) banner = '<div class="banner banner-red">' + ic('alert') + '<div><b>Catatan revisi dari pusat</b><p>' + esc(p.catatan_revisi) + '</p></div></div>';
   else if (p.status === 'Dikirim') banner = '<div class="banner banner-amber">' + ic('lock') + '<div><b>Terkirim — menunggu verifikasi pusat</b><p>Data terkunci sejak ' + fmtDate(p.dikirim_at) + '.' + (me.role === 'ADMIN' ? ' Periksa lalu putuskan di langkah 8.' : '') + '</p></div>' + (me.role === 'ADMIN' && W.step !== 8 ? '<div class="act"><button class="btn btn-primary btn-sm" data-go="8">Ke keputusan</button></div>' : '') + '</div>';
-  else if (p.status === 'Disetujui') banner = '<div class="banner banner-green">' + ic('check-circle') + '<div><b>Disetujui & terkunci</b><p>Disetujui ' + fmtDate(p.disetujui_at) + ' oleh ' + esc(p.disetujui_oleh || 'Super Admin') + '. Hasil resmi dihitung ulang oleh server.</p></div></div>';
+  else if (p.status === 'Disetujui') banner = '<div class="banner banner-green">' + ic('lock') + '<div><b>Disetujui & terkunci</b><p>Disetujui ' + fmtDate(p.disetujui_at) + ' oleh ' + esc(p.disetujui_oleh || 'Super Admin') + '. ' +
+    (me.role === 'CABANG' ? 'Laporan ini hanya bisa dilihat — tidak bisa diubah atau dihapus. Bila perlu perubahan, pusat akan membuka kunci dan mengembalikannya untuk revisi.' : me.role === 'ADMIN' ? 'Bila perlu perubahan, buka kunci lalu kembalikan ke cabang untuk revisi.' : 'Hasil resmi dihitung ulang oleh server.') + '</p></div>' +
+    (me.role === 'ADMIN' && !W.unlockOpen ? '<div class="act"><button class="btn btn-warn btn-sm" data-unlock>' + ic('unlock') + ' Buka Kunci</button></div>' : '') + '</div>';
   $('#wzWrap', W.el).innerHTML =
     '<div class="wz-head"><button class="btn btn-icon btn-sm" data-back title="Kembali">' + ic('chevron-left') + '</button><div class="grow" style="min-width:0"><h2>' + esc(p.nama_program || 'Perhitungan SROI') + '</h2><div class="small muted">Cabang ' + esc(M.cabangName(p.cabang_id)) + ' • Tahun ' + p.tahun + ' • Budget ' + rp(W.ctx.budget) + ' • UMK ' + rp(W.ctx.umk) + '</div></div>' +
     '<span class="save-ind" id="saveInd"></span>' + (!W.ro ? '<button class="btn btn-sm" data-save>' + ic('save') + ' Simpan</button>' : '') + '</div>' + banner +
@@ -399,7 +401,9 @@ var STEP_RENDER = {
     var actions = '';
     if (editable) actions = '<button class="btn" data-save>' + ic('save') + ' Simpan sekarang</button><button class="btn btn-primary" data-submit' + (r.errors.length ? ' disabled title="Perbaiki kesalahan validasi dulu"' : '') + '>' + ic('send') + ' Kirim ke Pusat</button>';
     if (me.role === 'ADMIN' && p.status === 'Dikirim') actions = '<button class="btn btn-danger" data-return>' + ic('refresh') + ' Kembalikan untuk Revisi</button><button class="btn btn-success" data-approve>' + ic('check-circle') + ' Setujui & Kunci</button>';
-    if (me.role === 'ADMIN' && p.status === 'Disetujui') actions = '<button class="btn btn-warn" data-unlock>' + ic('unlock') + ' Buka Kunci</button>';
+    if (me.role === 'ADMIN' && p.status === 'Disetujui') actions = W.unlockOpen
+      ? '<button class="btn" data-relock>' + ic('lock') + ' Kunci Kembali</button><button class="btn btn-danger" data-return>' + ic('refresh') + ' Kembalikan untuk Revisi</button>'
+      : '<button class="btn btn-warn" data-unlock>' + ic('unlock') + ' Buka Kunci</button>';
     var canUpload = editable;
     var berkas = d.berkas || [];
     return '<div class="grid g-4 kpis" style="gap:14px">' +
@@ -419,7 +423,7 @@ var STEP_RENDER = {
       cardSec('Sebaran Manfaat (F16)', 'Porsi PV impact per stakeholder', '', '<div class="card-pad" style="padding-top:0">' + Charts.donut(segs, { title: 'PV Impact', value: rpShort(r.pvImpact) }) + '<div class="mt-s">' + Charts.legend(segs) + '</div></div>') +
       cardSec('Laporan', 'Ekspor dokumen siap arsip', '', '<div class="card-pad ro-ok" style="padding-top:0"><div class="row"><button class="btn" data-exp="pdf">' + ic('file-text') + ' PDF</button><button class="btn" data-exp="xlsx">' + ic('download') + ' Excel (6 sheet)</button></div><p class="small muted mt-s">Ekspor memakai data terakhir di layar ini.</p></div>') +
       '</div></div>' +
-      (actions ? '<div class="card card-pad mt row between"><div><b>' + (me.role === 'ADMIN' && p.status === 'Dikirim' ? 'Keputusan Super Admin' : p.status === 'Disetujui' ? 'Perhitungan terkunci' : 'Kirim ke kantor pusat') + '</b><div class="small muted">' + (me.role === 'ADMIN' && p.status === 'Dikirim' ? 'Server akan menghitung ulang dengan SroiEngine dan menyimpan snapshot parameter.' : p.status === 'Disetujui' ? 'Membuka kunci mengubah status menjadi Perlu Revisi dan tercatat di log.' : 'Setelah dikirim, data terkunci sampai pusat memutuskan.') + '</div></div><div class="row">' + actions + '</div></div>' : '');
+      (actions ? '<div class="card card-pad mt row between' + (W.unlockOpen && p.status === 'Disetujui' ? ' unlock-open' : '') + '" id="decideCard"><div><b>' + (me.role === 'ADMIN' && p.status === 'Dikirim' ? 'Keputusan Super Admin' : p.status === 'Disetujui' ? (W.unlockOpen ? ic('unlock') + ' Kunci dibuka — kembalikan ke cabang untuk revisi?' : ic('lock') + ' Perhitungan disetujui & terkunci') : 'Kirim ke kantor pusat') + '</b><div class="small muted">' + (me.role === 'ADMIN' && p.status === 'Dikirim' ? 'Server akan menghitung ulang dengan SroiEngine dan menyimpan snapshot parameter.' : p.status === 'Disetujui' ? (W.unlockOpen ? 'Klik <b>Kembalikan untuk Revisi</b> dan tulis arahan pusat. Status menjadi Perlu Revisi, cabang bisa mengubah data, dan hasilnya keluar dari dashboard akumulasi sampai disetujui ulang. Klik <b>Kunci Kembali</b> bila batal.' : 'Cabang tidak bisa mengubah maupun menghapus laporan ini. Bila ada perubahan dari pusat, klik <b>Buka Kunci</b>.') : 'Setelah dikirim, data terkunci sampai pusat memutuskan.') + '</div></div><div class="row">' + actions + '</div></div>' : '');
   }
 };
 
@@ -559,7 +563,8 @@ async function onWzClick(e) {
   if (ds.submit !== undefined) return submitNow(t);
   if (ds.approve !== undefined) return decide('approve', t);
   if (ds['return'] !== undefined) return decide('return', t);
-  if (ds.unlock !== undefined) return decide('unlock', t);
+  if (ds.unlock !== undefined) { W.unlockOpen = true; if (W.step !== 8) goStep(8); renderWizard(); var dc = $('#decideCard'); if (dc) dc.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  if (ds.relock !== undefined) { W.unlockOpen = false; renderWizard(); return toast('Dikunci kembali — tidak ada perubahan.', 'ok'); }
   if (ds.delberkas) return deleteBerkas(ds.delberkas, t);
   if (ds.note) return noteAction(ds.note, ds.id, t);
   if (W.ro) return;
@@ -727,13 +732,19 @@ async function submitNow(btn) {
 async function decide(kind, btn) {
   var payload = { proyek_id: W.id }, action;
   if (kind === 'approve') { if (!(await confirmBox('Setujui perhitungan?', 'Server menghitung ulang dengan SroiEngine, menyimpan snapshot hasil & parameter, lalu mengunci data.', ic('check') + ' Setujui', 'btn-success'))) return; action = 'approveProyek'; }
-  if (kind === 'return') { var c = await promptBox('Kembalikan untuk revisi', 'Catatan revisi untuk cabang (wajib)', 'Kembalikan', 'btn-danger', true); if (!c) return; payload.catatan = c; action = 'returnProyek'; }
+  var wasApproved = W.data.proyek.status === 'Disetujui';
+  if (kind === 'return') {
+    var c = await promptBox(wasApproved ? 'Kembalikan laporan yang sudah disetujui untuk revisi' : 'Kembalikan untuk revisi', wasApproved ? 'Arahan perubahan dari pusat untuk cabang (wajib, tercatat di log)' : 'Catatan revisi untuk cabang (wajib)', 'Kembalikan', 'btn-danger', true);
+    if (!c) return;
+    if (wasApproved) { payload.alasan = c; action = 'unlockProyek'; } else { payload.catatan = c; action = 'returnProyek'; }
+  }
   if (kind === 'unlock') { var a = await promptBox('Buka kunci perhitungan', 'Alasan membuka kunci (wajib, tercatat di log)', 'Buka kunci', 'btn-warn', true); if (!a) return; payload.alasan = a; action = 'unlockProyek'; }
   await withBtn(btn, async function () {
     var res = await api(action, payload);
     if (!res.success) { toast(res.message, 'err'); if (res.data && res.data.errors) showServerErrors(res.data.errors); return; }
+    W.unlockOpen = false;
     applyStatus(res.data);
-    toast(kind === 'approve' ? 'Perhitungan disetujui & dikunci.' : kind === 'return' ? 'Dikembalikan ke cabang untuk revisi.' : 'Kunci dibuka — status Perlu Revisi.', 'ok');
+    toast(kind === 'approve' ? 'Perhitungan disetujui & dikunci.' : wasApproved ? 'Kunci dibuka & dikembalikan ke cabang untuk revisi.' : 'Dikembalikan ke cabang untuk revisi.', 'ok');
   });
 }
 function applyStatus(patch) {
