@@ -12,7 +12,7 @@
 var SroiEngine = (function () {
   'use strict';
 
-  var VERSION = '1.1.0';
+  var VERSION = '1.2.0';
 
   /* ---------- util angka (data tersimpan: Number atau string "1234.5") ---------- */
   function n(v) {
@@ -29,6 +29,17 @@ var SroiEngine = (function () {
     var s = String(ref == null ? '' : ref).trim();
     if (!s || s === 'ALL' || s === '*') return ['ALL'];
     return s.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  /** Daftar komponen proksi satu outcome. Format baru: proksi_list (array/JSON); format lama: jenis_proksi tunggal. */
+  function proksiOf(o) {
+    var list = o.proksi_list;
+    if (typeof list === 'string' && list.trim()) { try { list = JSON.parse(list); } catch (e) { list = null; } }
+    if (!Array.isArray(list) || !list.length) {
+      if (!o.jenis_proksi && !o.ref_proksi) return [];
+      list = [{ jenis: o.jenis_proksi, ref: o.ref_proksi, porsi: o.porsi_proksi, nilai: o.nilai_proksi, notes: '' }];
+    }
+    return list.map(function (c) { c = c || {}; return { jenis: String(c.jenis || '').toUpperCase(), ref: c.ref == null ? '' : String(c.ref), porsi: n(c.porsi === '' || c.porsi == null ? 100 : c.porsi), nilai: c.nilai, notes: c.notes || '' }; });
   }
 
   /** Parameter baku → objek siap pakai */
@@ -202,60 +213,63 @@ var SroiEngine = (function () {
     }
     var ocHasil = {}, pvImpact = 0, totalImpact = 0, perShImpact = {};
     oc.forEach(function (o, idx) {
-      var jenis = String(o.jenis_proksi || '').toUpperCase(), porsi = n(o.porsi_proksi === '' || o.porsi_proksi == null ? 100 : o.porsi_proksi);
       var s = shById[o.sh_id] || {}, sektorFilter = s.kelompok_sektor || '';
       var label = 'Outcome #' + (idx + 1) + (s.nama ? ' (' + s.nama + ')' : '');
-      var nilai = 0, refs = refList(o.ref_proksi);
       if (!o.sh_id || !shById[o.sh_id]) errors.push({ step: 7, msg: label + ': stakeholder belum dipilih.' });
-      if (jenis === 'KPI_BUDGET') {
-        var kpis = refs[0] === 'ALL' ? kpiMaster.map(function (k) { return k.kpi_id; }) : refs;
-        var secs = sektorFilter ? (dihitung.indexOf(sektorFilter) > -1 ? [sektorFilter] : []) : dihitung;
-        if (sektorFilter && !secs.length) warnings.push({ step: 7, msg: label + ': sektor stakeholder ini tidak termasuk sektor yang dihitung, proksi KPI = 0.' });
-        kpis.forEach(function (kid) {
-          var km = kpiMaster.filter(function (k) { return k.kpi_id === kid; })[0]; if (!km) return;
-          secs.forEach(function (sid) {
-            nilai += kpi.cell[kid + '|' + sid] || 0;
-            use('KPI:' + kid + ':' + sid, km.nama_kpi, 'KPI', porsi, o.outcome_id);
+      var comps = proksiOf(o), nilaiTot = 0, nilaiPorsiTot = 0, kompHasil = [];
+      if (!comps.length || !comps.some(function (c) { return c.jenis; })) errors.push({ step: 7, msg: label + ': belum memilih jenis/sumber proksi.' });   // R3
+      comps.forEach(function (c, ci) {
+        var jenis = c.jenis, porsi = c.porsi, refs = refList(c.ref), nilai = 0;
+        var cl = label + (comps.length > 1 ? ' • proksi ke-' + (ci + 1) : '');
+        if (!jenis) { if (comps.length > 1) errors.push({ step: 7, msg: cl + ': jenis proksi belum dipilih.' }); }
+        else if (jenis === 'KPI_BUDGET') {
+          var kpis = refs[0] === 'ALL' ? kpiMaster.map(function (k) { return k.kpi_id; }) : refs;
+          var secs = sektorFilter ? (dihitung.indexOf(sektorFilter) > -1 ? [sektorFilter] : []) : dihitung;
+          if (sektorFilter && !secs.length) warnings.push({ step: 7, msg: cl + ': sektor stakeholder ini tidak termasuk sektor yang dihitung, proksi KPI = 0.' });
+          kpis.forEach(function (kid) {
+            var km = kpiMaster.filter(function (k) { return k.kpi_id === kid; })[0]; if (!km) return;
+            secs.forEach(function (sid) { nilai += kpi.cell[kid + '|' + sid] || 0; use('KPI:' + kid + ':' + sid, km.nama_kpi, 'KPI', porsi, o.outcome_id); });
           });
-        });
-        if (!kpis.length) errors.push({ step: 7, msg: label + ': pilih minimal satu KPI sebagai sumber proksi.' });
-      } else if (jenis === 'BENCHMARK') {
-        var bms = refs[0] === 'ALL' ? bm.map(function (b) { return b.bm_id; }) : refs;
-        bms.forEach(function (id) { if (!bmHasil[id]) return; nilai += bmHasil[id].nilai; use('BM:' + id, 'Benchmark ' + (bm.filter(function (b) { return b.bm_id === id; })[0].nama_expert || ''), 'BENCHMARK', porsi, o.outcome_id); });
-        if (!bm.length) errors.push({ step: 7, msg: label + ': tabel benchmark (langkah 6) masih kosong.' });
-      } else if (jenis === 'NET_PROFIT') {
-        var us = refs[0] === 'ALL' ? umkm.map(function (u) { return u.umkm_id; }) : refs;
-        us.forEach(function (id) {
-          var u = umkmById[id]; if (!u) return;
-          if (sektorFilter && u.sektor_id !== sektorFilter) return;
-          nilai += omsetHasil[id] ? omsetHasil[id].f7 : 0;
-          use('NP:' + id, 'Net profit ' + (u.nama_umkm || ''), 'NET_PROFIT', porsi, o.outcome_id);
-        });
-        if (adj(o) < 1) warnings.push({ step: 7, msg: label + ': proksi Net Profit sudah dikurangi faktor penyesuaian per UMKM (F7). Isi 0% di baris ini bila tidak ingin dikurangi dua kali.' });
-      } else if (jenis === 'MANFAAT_SH') {
-        var mfs = refs[0] === 'ALL' ? [] : refs;
-        mfs.forEach(function (id) {
-          if (mfHasil[id] === undefined) return;
-          var row = mf.filter(function (m) { return m.mf_id === id; })[0];
-          nilai += mfHasil[id]; use('MF:' + id, 'Manfaat: ' + (row.parameter || ''), 'MANFAAT_SH', porsi, o.outcome_id);
-        });
-        if (!mfs.length) errors.push({ step: 7, msg: label + ': pilih baris manfaat stakeholder sebagai sumber proksi.' });
-      } else if (jenis === 'MANUAL') {
-        nilai = n(o.nilai_proksi);
-        if (isBlank(o.proxy_notes)) errors.push({ step: 7, msg: label + ': proksi MANUAL wajib diisi catatan sumber proksi.' });
-      } else {
-        errors.push({ step: 7, msg: label + ': belum memilih jenis/sumber proksi.' });            // R3
-      }
+          if (!kpis.length) errors.push({ step: 7, msg: cl + ': pilih minimal satu KPI sebagai sumber proksi.' });
+        } else if (jenis === 'BENCHMARK') {
+          var bms = refs[0] === 'ALL' ? bm.map(function (b) { return b.bm_id; }) : refs;
+          bms.forEach(function (id) { if (!bmHasil[id]) return; nilai += bmHasil[id].nilai; use('BM:' + id, 'Benchmark ' + (bm.filter(function (b) { return b.bm_id === id; })[0].nama_expert || ''), 'BENCHMARK', porsi, o.outcome_id); });
+          if (!bm.length) errors.push({ step: 7, msg: cl + ': tabel benchmark (langkah 6) masih kosong.' });
+        } else if (jenis === 'NET_PROFIT') {
+          var us = refs[0] === 'ALL' ? umkm.map(function (u) { return u.umkm_id; }) : refs;
+          us.forEach(function (id) {
+            var u = umkmById[id]; if (!u) return;
+            if (sektorFilter && u.sektor_id !== sektorFilter) return;
+            nilai += omsetHasil[id] ? omsetHasil[id].f7 : 0;
+            use('NP:' + id, 'Net profit ' + (u.nama_umkm || ''), 'NET_PROFIT', porsi, o.outcome_id);
+          });
+          if (adj(o) < 1) warnings.push({ step: 7, msg: cl + ': proksi Net Profit sudah dikurangi faktor penyesuaian per UMKM (F7). Isi 0% di faktor outcome ini bila tidak ingin dikurangi dua kali.' });
+        } else if (jenis === 'MANFAAT_SH') {
+          var mfs = refs[0] === 'ALL' ? [] : refs;
+          mfs.forEach(function (id) {
+            if (mfHasil[id] === undefined) return;
+            var row = mf.filter(function (m) { return m.mf_id === id; })[0];
+            nilai += mfHasil[id]; use('MF:' + id, 'Manfaat: ' + (row.parameter || ''), 'MANFAAT_SH', porsi, o.outcome_id);
+          });
+          if (!mfs.length) errors.push({ step: 7, msg: cl + ': pilih baris manfaat stakeholder sebagai sumber proksi.' });
+        } else if (jenis === 'MANUAL') {
+          nilai = n(c.nilai);
+          if (isBlank(c.notes) && isBlank(o.proxy_notes)) errors.push({ step: 7, msg: cl + ': proksi MANUAL wajib diisi catatan sumber proksi.' });
+        }
+        if (porsi < 0 || porsi > 100) errors.push({ step: 7, msg: cl + ': porsi proksi harus 0–100%.' });
+        var np = nilai * pct(porsi);
+        nilaiTot += nilai; nilaiPorsiTot += np;
+        kompHasil.push({ jenis: jenis, ref: c.ref, porsi: porsi, nilai: nilai, nilaiPorsi: np, notes: c.notes || '' });
+      });
       ['dw', 'ds', 'at', 'do'].forEach(function (f) { var x = n(o[f]); if (x < 0 || x > 100) errors.push({ step: 7, msg: label + ': faktor ' + f.toUpperCase() + ' di luar 0–100%.' }); });
-      if (porsi < 0 || porsi > 100) errors.push({ step: 7, msg: label + ': porsi proksi harus 0–100%.' });
 
-      var y1 = nilai * pct(porsi) * adj(o);                                                         // F9
+      var y1 = nilaiPorsiTot * adj(o);                                                              // F9 = Σ(nilai proksi × porsi) × penyesuaian
       var dur = Math.max(1, Math.round(n(o.durasi_tahun) || 1)), years = [], pv = 0, sumNom = 0, cur = y1;
       for (var t = 1; t <= dur; t++) {
         if (t > 1) cur = cur * (1 - pct(o['do']));                                                  // F10
         years.push(cur); sumNom += cur; pv += cur / Math.pow(1 + P.r, t);                           // F11
       }
-      ocHasil[o.outcome_id] = { nilai_proksi: nilai, impact: y1, impactTahun: years, impactNominal: sumNom, pv: pv };
+      ocHasil[o.outcome_id] = { nilai_proksi: nilaiTot, nilai_porsi: nilaiPorsiTot, komponen: kompHasil, impact: y1, impactTahun: years, impactNominal: sumNom, pv: pv };
       pvImpact += pv; totalImpact += sumNom;
       perShImpact[o.sh_id || '_'] = (perShImpact[o.sh_id || '_'] || 0) + pv;
       if (y1 === 0) warnings.push({ step: 7, msg: label + ': nilai impact = 0.' });
@@ -340,7 +354,7 @@ var SroiEngine = (function () {
     };
   }
 
-  return { VERSION: VERSION, compute: compute, summary: summary, bintang: bintang, parseParams: parseParams, LABEL_BINTANG: LABEL_BINTANG, n: n };
+  return { VERSION: VERSION, proksiOf: proksiOf, compute: compute, summary: summary, bintang: bintang, parseParams: parseParams, LABEL_BINTANG: LABEL_BINTANG, n: n };
 })();
 
 /* Node (uji otomatis) */

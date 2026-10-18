@@ -316,6 +316,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .oc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 14px; }
 .oc-grid .s2 { grid-column: span 2; } .oc-grid .s4 { grid-column: 1 / -1; }
 .oc-grid .field > label { font-size: 12px; }
+.pk-row { border: 1px dashed var(--border-strong); border-radius: var(--r); padding: 10px 12px 12px; background: #FAFCFF; margin-bottom: 10px; }
+.pk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; min-height: 28px; }
+.pk-no { font-size: 12px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .05em; }
+.pk-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px 12px; }
+.pk-grid .pk-full { grid-column: 1 / -1; }
+@media (max-width: 767px) { .pk-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .pk-grid .pk-j { grid-column: 1 / -1; } }
 .usage { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .usage .u { border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; font-size: 12.5px; background: #fff; }
 .usage .u .bar { height: 6px; background: var(--slate-bg); border-radius: 4px; margin-top: 6px; overflow: hidden; }
